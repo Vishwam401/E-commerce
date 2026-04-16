@@ -1,0 +1,5 @@
+# Ignore environment files containing sensitive data
+.env
+
+# Ignore virtual environments
+.venv
