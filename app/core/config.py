@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REDIS_URL: str
 
+    model_config = SettingsConfigDict(env_file=".env.docker")
 
-    model_config = SettingsConfigDict(env_file=".env")
 
 settings = Settings()
