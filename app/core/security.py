@@ -1,11 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Union, Tuple
-from jose import jwt, JWTError
+from jose import jwt
 from app.core.config import settings
 from passlib.context import CryptContext
+import redis.asyncio as redis
 
 # Argon2-only policy for all password hashes.
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+redis_client = redis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, decode_responses=True)
 
 
 def get_password_hash(password: str) -> str:
@@ -33,13 +35,29 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
         )
 
     to_encode = {'exp': expire, 'sub': str(subject)}
+    return jwt.encode(
+        to_encode,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM
+    )
 
-    try:
-        encoded_jwt = jwt.encode(
-            to_encode,
-            settings.SECRET_KEY,
-            algorithm=settings.ALGORITHM
-        )
-        return encoded_jwt
-    except JWTError as e:
-        raise RuntimeError(f"Error encoding JWT: {str(e)}")
+
+def create_refresh_token(subject: Union[str, Any]) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(days=7)
+    to_encode = {'exp': expire, 'sub': str(subject), 'type': 'refresh'}  # Fixed variable name
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+async def blacklist_token(token: str, expiry: int):
+    if not token:
+        raise ValueError("Token must not be empty.")
+    if expiry <= 0:
+        raise ValueError("Expiry time must be greater than zero.")
+    await redis_client.setex(name=token, time=expiry, value='blacklisted')
+
+
+async def is_token_blacklisted(token: str) -> bool:
+    if not token:
+        raise ValueError("Token must not be empty.")
+    res = await redis_client.get(token)
+    return res == 'blacklisted'
