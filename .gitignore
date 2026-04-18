@@ -1,6 +1,11 @@
 # Ignore environment files containing sensitive data
 .env
+.env*
 
 # Ignore virtual environments
 .venv
 venv
+
+# Ignore markdown docs for this repo workflow
+*.md
+
