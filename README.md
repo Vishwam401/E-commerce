@@ -100,9 +100,13 @@ docker compose exec api alembic upgrade head
 - Advanced security middleware (rate limiting, headers)
 - Search and filtering enhancements
 
-## Contributing
-Issues and PRs are welcome.
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! 
+Feel free to check the [issues page](https://github.com/Vishwam401/E-commerce/issues).
 
 ---
-Built with love by [Vishwam401](https://github.com/Vishwam401)
 
+<p align="center">
+  Built with ❤️ by <a href="https://github.com/Vishwam401">Vishwam401</a>
+</p>
