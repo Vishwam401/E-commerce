@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Union, Tuple
-from jose import jwt
+from jose import jwt, JWTError
 from app.core.config import settings
 from passlib.context import CryptContext
 import redis.asyncio as redis
+from redis.exceptions import RedisError
 
 # Argon2-only policy for all password hashes.
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -34,7 +35,7 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
 
-    to_encode = {'exp': expire, 'sub': str(subject)}
+    to_encode = {'exp': expire, 'sub': str(subject), "type": "access"}
     return jwt.encode(
         to_encode,
         settings.SECRET_KEY,
@@ -53,11 +54,38 @@ async def blacklist_token(token: str, expiry: int):
         raise ValueError("Token must not be empty.")
     if expiry <= 0:
         raise ValueError("Expiry time must be greater than zero.")
-    await redis_client.setex(name=token, time=expiry, value='blacklisted')
+    try:
+        await redis_client.setex(name=token, time=expiry, value='blacklisted')
+    except RedisError as exc:
+        raise RuntimeError("Redis blacklist write failed.") from exc
 
 
 async def is_token_blacklisted(token: str) -> bool:
     if not token:
         raise ValueError("Token must not be empty.")
-    res = await redis_client.get(token)
+    try:
+        res = await redis_client.get(token)
+    except RedisError as exc:
+        raise RuntimeError("Redis blacklist read failed.") from exc
     return res == 'blacklisted'
+
+
+def get_token_ttl_seconds(token: str) -> int:
+    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    exp = payload.get("exp")
+    if not isinstance(exp, (int, float)):
+        raise JWTError("Invalid token expiry claim.")
+    ttl = int(exp - datetime.now(timezone.utc).timestamp())
+    if ttl <= 0:
+        raise JWTError("Token already expired.")
+    return ttl
+
+
+
+def create_password_reset_token(email: str) -> str:
+
+    expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+    to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
+
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)

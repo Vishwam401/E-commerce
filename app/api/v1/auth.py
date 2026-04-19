@@ -4,18 +4,19 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from app.db.session import get_db
 from app.db.models import User
-from app.schemas.user import UserCreate, UserOut
-from app.core.security import get_password_hash, verify_and_update_password, create_access_token, create_refresh_token, blacklist_token
+from app.schemas.user import UserCreate, UserOut, PasswordResetCheck, PasswordResetConfirm
+from app.core.security import get_password_hash, verify_and_update_password, create_access_token, create_refresh_token, blacklist_token, get_token_ttl_seconds, create_password_reset_token
 import logging
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from jose import jwt, JWTError
 from app.core.config import settings
+from app.api.dependencies import require_roles
 
 router = APIRouter(prefix='/auth', tags=['Authentication'])
 
 logger = logging.getLogger(__name__)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # Add logging to capture input data and validation errors
 @router.post('/register', response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -96,20 +97,79 @@ async def login(
 
 @router.post("/logout")
 async def logout(token: str = Depends(oauth2_scheme)):
-    await blacklist_token(token, expiry=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    try:
+        ttl_seconds = get_token_ttl_seconds(token)
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
+    try:
+        await blacklist_token(token, expiry=ttl_seconds)
+    except RuntimeError:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Logout service unavailable")
+
     return {"detail": "Successfully logged out"}
 
 
 @router.post("/refresh")
-async def refresh_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
+async def refresh_token(refresh_token: str):
     try:
         payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid refresh token")
-        email = payload.get("sub")
+        subject = payload.get("sub")
     except JWTError:
         raise HTTPException(status_code=401, detail="Refresh token expired or invalid")
 
     # Naya Access Token generate karo
-    new_access_token = create_access_token(subject=email)
+    new_access_token = create_access_token(subject=subject)
     return {"access_token": new_access_token, "token_type": "bearer"}
+
+
+@router.post("/admin-only")
+async def admin_only_action(current_user:User = Depends(require_roles("admin"))):
+    return {'ok':True}
+
+
+@router.post("/forgot-password")
+async def forgot_password(data: PasswordResetCheck,db: AsyncSession= Depends(get_db) ):
+
+    result = await db.execute(select(User).where(func.lower(User.email) == data.email.lower()))
+    user= result.scalar_one_or_none()
+
+    if user:
+        token = create_password_reset_token(data.email)
+
+        print(f"\n*******\n RESET TOKEN: {token}\n*******\n")
+
+    # Keep response generic to avoid email enumeration.
+    return {"detail": "If this email exists, a reset token has been generated (simulated)."}
+
+
+@router.post("/reset-password")
+async def reset_password(data: PasswordResetConfirm, db: AsyncSession = Depends(get_db)):
+    try:
+        payload = jwt.decode(data.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+
+        if payload.get("type") != "password_reset":
+            raise HTTPException(status_code=400, detail="Invalid token type")
+
+        token_email = payload.get("sub")
+        if not isinstance(token_email, str) or not token_email:
+            raise HTTPException(status_code=400, detail="Invalid token payload")
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Token expired or invalid")
+
+    if token_email.lower() != data.email.lower():
+        raise HTTPException(status_code=400, detail="Email and token do not match")
+
+
+    result = await db.execute(select(User).where(func.lower(User.email) == data.email.lower()))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    user.hashed_password = get_password_hash(data.new_password)
+    await db.commit()
+
+    return  {"detail": "Password successfully reset!"}

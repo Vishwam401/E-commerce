@@ -1,11 +1,24 @@
 # Ignore environment files containing sensitive data
 .env
 .env*
+!.env.example
 
 # Ignore virtual environments
 .venv
 venv
 
-# Ignore markdown docs for this repo workflow
-*.md
+# Ignore Python cache and bytecode
+__pycache__/
+*.pyc
+
+# Ignore IDE local files
+.idea/
+
+# Ignore local test folder if generated during practice
+tests/
+
+# Ignore only internal markdown notes/docs
+AUTH_FLOW_DOCKER.md
+DOCKER_HINGLISH_GUIDE.md
+REVISION_NOTES.md
 
