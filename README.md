@@ -7,10 +7,16 @@ A FastAPI-based E-commerce backend with JWT authentication, Redis-backed token r
 ### Authentication & Security
 - JWT access + refresh token flow
 - Redis-backed token blacklist on logout
+- Redis-backed login rate limiting (IP based, `5` attempts per `60s`)
 - Access-token type validation for protected routes
 - Admin-only route protection using role dependency (`is_admin`)
+- Email verification flow:
+  - Register creates user in inactive state (`is_active=False`)
+  - Verification token generated and sent via background email task
+  - `GET /auth/verify` activates account
+  - Login blocked for unverified users (`403`)
 - Password reset flow:
-  - `forgot-password` generates a simulated reset token
+  - `forgot-password` keeps response generic (no email enumeration)
   - `reset-password` validates token type + email match + strong password
 
 ### Developer Experience
@@ -18,6 +24,7 @@ A FastAPI-based E-commerce backend with JWT authentication, Redis-backed token r
 - SQLAlchemy async session setup
 - Alembic migration support
 - Pydantic schema validation with strong password rules
+- Config-driven email verification URL (`EMAIL_VERIFY_BASE_URL`) for mobile/LAN testing
 
 ## Project Structure
 
@@ -30,9 +37,12 @@ E-Commerce/
 │   │   └── v1/auth.py
 │   ├── core/
 │   │   ├── config.py
+│   │   ├── redis.py
 │   │   └── security.py
 │   ├── db/
 │   ├── schemas/
+│   ├── utils/
+│   │   └── email.py
 │   └── main.py
 ├── docker-compose.yml
 ├── Dockerfile
@@ -46,6 +56,7 @@ E-Commerce/
 - Redis
 - SQLAlchemy
 - Alembic
+- FastAPI-Mail / SMTP (email verification)
 - Docker / Docker Compose
 
 ## Local Setup (Docker)
@@ -57,7 +68,7 @@ cd E-commerce
 ```
 
 ### 2) Environment file
-Create `.env.docker` (or use the existing project convention):
+Create `.env.docker`:
 
 ```env
 DATABASE_URL=postgresql+asyncpg://postgres:vish@db:5432/ecommerce_db
@@ -66,6 +77,17 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REDIS_HOST=redis
 REDIS_PORT=6379
+
+MAIL_USERNAME=your_email@example.com
+MAIL_PASSWORD=your_app_password
+MAIL_FROM=your_email@example.com
+MAIL_PORT=587
+MAIL_SERVER=smtp.gmail.com
+MAIL_STARTTLS=True
+MAIL_SSL_TLS=False
+
+# Use a phone/LAN reachable URL in local network testing
+EMAIL_VERIFY_BASE_URL=http://YOUR_LAN_IP:8001
 ```
 
 ### 3) Start services
@@ -88,21 +110,30 @@ docker compose exec api alembic upgrade head
 - `POST /auth/login`
 - `POST /auth/refresh`
 - `POST /auth/logout`
+- `GET /auth/verify`
 - `POST /auth/forgot-password`
 - `POST /auth/reset-password`
 - `POST /auth/admin-only`
+- `GET /auth/admin-dashboard`
+- `GET /auth/inventory`
+
+## Quick Verification Checklist
+1. Register with a new email (`POST /auth/register`)
+2. Open verification link from email (`GET /auth/verify?token=...`)
+3. Login with verified account (`POST /auth/login`)
+4. Trigger rate limit using repeated wrong-password attempts and confirm `429`
+5. Wait 60 seconds and confirm login attempts are allowed again
 
 ## Roadmap (Planned)
 - Product/catalog modules
 - Cart and order lifecycle
 - Coupon/discount engine
 - Webhooks and payment integrations
-- Advanced security middleware (rate limiting, headers)
 - Search and filtering enhancements
 
 ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome! 
+Contributions, issues, and feature requests are welcome!
 Feel free to check the [issues page](https://github.com/Vishwam401/E-commerce/issues).
 
 ---
