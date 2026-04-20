@@ -14,7 +14,7 @@ class User(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(100), nullable=False)
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
     #soft delete flag
     is_deleted = Column(Boolean, default=False)
@@ -70,8 +70,3 @@ class Product(Base):
 
     # Relationship jo product object se Category access krne degi
     category = relationship("Category", back_populates="products")
-
-
-
-
-

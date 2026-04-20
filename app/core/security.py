@@ -89,3 +89,14 @@ def create_password_reset_token(email: str) -> str:
     to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
 
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+
+def create_verification_token(email: str)-> str:
+    expire = datetime.now(timezone.utc) + timedelta(hours = 24)
+
+    to_encode = {"exp": expire, "sub": email, "type": "email_verification"}
+
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
