@@ -9,7 +9,7 @@ from alembic import context
 from sqlalchemy.orm import DeclarativeBase
 
 from app.db.base import Base
-from app.db.models import User, Category, Product
+from app.db.models import User, Category, Product, Order
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
