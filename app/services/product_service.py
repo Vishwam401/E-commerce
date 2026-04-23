@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+import uuid
 from app.db.models.product import Product
 from app.schemas.product import ProductCreate
 from app.services.utils import generate_unique_slug
@@ -34,7 +35,12 @@ class ProductService:
 
     @staticmethod
     async def soft_delete(db: AsyncSession, product_id: str):
-        query = select(Product).where(Product.id == product_id)
+        try:
+            product_uuid = uuid.UUID(product_id)
+        except (ValueError, AttributeError):
+            return False
+
+        query = select(Product).where(Product.id == product_uuid)
         result = await db.execute(query)
         db_obj = result.scalar_one_or_none()
 

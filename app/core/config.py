@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REDIS_HOST: str
     REDIS_PORT: int = 6379  # Default Redis port
+    REDIS_PASSWORD: str | None = None
 
     MAIL_USERNAME: str
     MAIL_PASSWORD: str
