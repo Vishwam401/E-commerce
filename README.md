@@ -64,6 +64,7 @@ E-Commerce/
 ├── Dockerfile
 ├── requirements.txt
 └── alembic.ini
+```
 
 ## Tech Stack
 - FastAPI
