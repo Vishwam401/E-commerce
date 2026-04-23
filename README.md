@@ -7,6 +7,7 @@ A FastAPI-based E-commerce backend with JWT authentication, Redis-backed token r
 ### Authentication & Security
 - JWT access + refresh token flow
 - Redis-backed token blacklist on logout
+- **Authenticated Redis:** Security enabled with password-based authentication (Verified via PING-PONG)
 - Redis-backed login rate limiting (IP based, `5` attempts per `60s`)
 - Access-token type validation for protected routes
 - Admin-only route protection using role dependency (`is_admin`)
@@ -19,10 +20,15 @@ A FastAPI-based E-commerce backend with JWT authentication, Redis-backed token r
   - `forgot-password` keeps response generic (no email enumeration)
   - `reset-password` validates token type + email match + strong password
 
+### Catalog & Cart (New)
+- **Modular Data Architecture:** Refactored monolithic `models.py` into a modular folder structure (`app/db/models/`) for User, Product, and Cart.
+- **Cart Lifecycle:** Basic cart management logic with SQLAlchemy async persistence.
+- **Enhanced Logging:** System-wide logging implemented for API tracking and easier debugging.
+
 ### Developer Experience
-- Docker Compose setup for API + PostgreSQL + Redis
+- Docker Compose setup for API + PostgreSQL + Redis (Authenticated)
 - SQLAlchemy async session setup
-- Alembic migration support
+- Alembic migration support for modular schema changes
 - Pydantic schema validation with strong password rules
 - Config-driven email verification URL (`EMAIL_VERIFY_BASE_URL`) for mobile/LAN testing
 
@@ -33,13 +39,23 @@ E-Commerce/
 ├── alembic/
 ├── app/
 │   ├── api/
-│   │   ├── dependencies.py
-│   │   └── v1/auth.py
+│   │   ├── v1/
+│   │   │   ├── auth.py
+│   │   │   ├── products.py
+│   │   │   └── cart.py
+│   │   └── dependencies.py
 │   ├── core/
 │   │   ├── config.py
 │   │   ├── redis.py
-│   │   └── security.py
+│   │   ├── security.py
+│   │   └── logging_config.py
 │   ├── db/
+│   │   ├── models/
+│   │   │   ├── user.py
+│   │   │   ├── product.py
+│   │   │   └── cart.py
+│   │   ├── base.py
+│   │   └── session.py
 │   ├── schemas/
 │   ├── utils/
 │   │   └── email.py
@@ -48,12 +64,11 @@ E-Commerce/
 ├── Dockerfile
 ├── requirements.txt
 └── alembic.ini
-```
 
 ## Tech Stack
 - FastAPI
 - PostgreSQL
-- Redis
+- Redis (Authenticated)
 - SQLAlchemy
 - Alembic
 - FastAPI-Mail / SMTP (email verification)
@@ -77,6 +92,7 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REDIS_HOST=redis
 REDIS_PORT=6379
+REDIS_PASSWORD=your_redis_password
 
 MAIL_USERNAME=your_email@example.com
 MAIL_PASSWORD=your_app_password
@@ -125,11 +141,19 @@ docker compose exec api alembic upgrade head
 5. Wait 60 seconds and confirm login attempts are allowed again
 
 ## Roadmap (Planned)
-- Product/catalog modules
-- Cart and order lifecycle
-- Coupon/discount engine
-- Webhooks and payment integrations
-- Search and filtering enhancements
+[x] User Authentication & Email Verification
+
+[x] Modular Architecture Refactor (Split Models)
+
+[x] Basic Cart management
+
+[ ] Order and checkout lifecycle (Feature 3 - Next)
+
+[ ] Redis-backed Cart Caching
+
+[ ] Coupon/discount engine
+
+[ ] Webhooks and payment integrations
 
 ## 🤝 Contributing
 
