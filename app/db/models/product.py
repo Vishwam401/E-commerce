@@ -1,9 +1,15 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.db.models.cart import CartItem
+
 import uuid
 from typing import Optional, Dict, Any
 from sqlalchemy import String, Text, Integer, ForeignKey, Boolean, Numeric, text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from app.db.base_class import Base
+from app.db.models.cart import CartItem
 
 
 
@@ -51,6 +57,8 @@ class Product(Base):
         UUID(as_uuid=True), ForeignKey('categories.id', ondelete='SET NULL'), nullable=True, index=True
     )
     category: Mapped[Optional[Category]] = relationship("Category", back_populates="products")
+
+    cart_items: Mapped[list["CartItem"]] = relationship("CartItem", back_populates="product")
 
     def __repr__(self):
         return f"<Product(name='{self.name}', price={self.price})>"

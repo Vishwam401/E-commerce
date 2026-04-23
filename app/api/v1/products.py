@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
+import uuid
 
 from app.api import dependencies as deps
 from app.schemas.product import ProductCreate, ProductResponse, CategoryCreate, CategoryResponse
@@ -42,7 +43,12 @@ async def delete_product(
     product_id: str,
     db: AsyncSession = Depends(deps.get_db)
 ):
-    success = await ProductService.soft_delete(db, str(product_id))
+    try:
+        product_uuid = uuid.UUID(product_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid product ID format")
+
+    success = await ProductService.soft_delete(db, str(product_uuid))
     if not success:
         raise HTTPException(status_code=404, detail="Product not found")
     return None # 204 No Content return karega

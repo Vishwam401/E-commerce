@@ -82,55 +82,77 @@ async def login(
         db: AsyncSession = Depends(get_db),
         form_data: OAuth2PasswordRequestForm = Depends(),
 ):
+    """
+     LOGIN ENDPOINT - Detailed logging for debugging
+    """
+    logger.info(f"[LOGIN] User attempting login with email: {form_data.username}")
+
     # 1) Rate-limit by client IP (5 attempts / 60s)
     client_ip = request.client.host if request.client else "unknown"
     rate_key = f"rate_limit:login:{client_ip}"
+    logger.debug(f"[LOGIN] Client IP: {client_ip}")
 
     try:
         if await is_rate_limited(rate_key, limit=5, window=60, redis_client=redis_client):
-            logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+            logger.warning(f"[LOGIN] ❌ Rate limit exceeded for IP: {client_ip}")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many login attempts. Please try again later."
             )
+        logger.debug(f"[LOGIN] ✅ Rate limit check passed")
     except RedisError:
         # Fail-open: if Redis is down, do not block all login attempts.
-        logger.warning("Rate limiter unavailable (Redis error). Continuing login flow.")
+        logger.warning("[LOGIN] ⚠️ Rate limiter unavailable (Redis error). Continuing login flow.")
 
+    # Step 1: Check if user exists
     query = select(User).where(func.lower(User.email) == form_data.username.lower())
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 
     if not user:
-        logger.warning(f"Failed login attempt for email: {form_data.username}")
+        logger.warning(f"[LOGIN] ❌ User not found with email: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    logger.debug(f"[LOGIN] ✅ User found: ID={user.id}, Email={user.email}, is_active={user.is_active}")
+
+    # Step 2: Verify password
     is_valid_password, new_hash = verify_and_update_password(form_data.password, user.hashed_password)
     if not is_valid_password:
-        logger.warning(f"Failed login attempt for email: {form_data.username}")
+        logger.warning(f"[LOGIN] ❌ Invalid password for user: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    logger.debug(f"[LOGIN] ✅ Password verified successfully")
+
+    # Step 3: Check if user is active (email verified)
     if not user.is_active:
+        logger.warning(f"[LOGIN] ❌ User account NOT VERIFIED (is_active=False). Email: {form_data.username}")
+        logger.warning(f"[LOGIN]    → User must verify email first before login")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email before logging in."
         )
 
+    logger.info(f"[LOGIN] ✅ User is_active=True, proceeding with token generation")
+
+    # Step 4: Update password hash if needed
     if new_hash:
         user.hashed_password = new_hash
         await db.commit()
+        logger.debug(f"[LOGIN] ✅ Password hash updated")
 
-    # Create access + refresh token pair at login.
+    # Step 5: Create tokens
     access_token = create_access_token(subject=user.username)
     refresh_token = create_refresh_token(subject=user.username)
+
+    logger.info(f"[LOGIN] ✅ Login successful for user: {user.username} (ID: {user.id})")
 
     return {
         "access_token": access_token,
@@ -156,16 +178,36 @@ async def logout(token: str = Depends(oauth2_scheme)):
 
 @router.post("/refresh")
 async def refresh_token(refresh_token: str):
+    """🔐 REFRESH TOKEN ENDPOINT - Generate new access token"""
+    logger.info(f"[REFRESH] Refresh token request received (first 20 chars): {refresh_token[:20]}...")
+
     try:
+        logger.debug(f"[REFRESH] Decoding refresh token with SECRET_KEY")
         payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        if payload.get("type") != "refresh":
+        logger.debug(f"[REFRESH] ✅ Token decoded. Payload: {payload}")
+
+        token_type = payload.get("type")
+        if token_type != "refresh":
+            logger.warning(f"[REFRESH] ❌ Wrong token type. Expected 'refresh', got '{token_type}'")
             raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+        logger.debug(f"[REFRESH] ✅ Token type is 'refresh'")
+
         subject = payload.get("sub")
-    except JWTError:
+        logger.debug(f"[REFRESH] Subject (username): {subject}")
+
+        if not subject:
+            logger.warning(f"[REFRESH] ❌ No subject in refresh token")
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    except JWTError as e:
+        logger.warning(f"[REFRESH] ❌ JWT decode error: {str(e)}")
         raise HTTPException(status_code=401, detail="Refresh token expired or invalid")
 
-    # Naya Access Token generate karo
+    # Generate new Access Token
     new_access_token = create_access_token(subject=subject)
+    logger.info(f"[REFRESH] ✅ New access token generated for subject: {subject}")
+
     return {"access_token": new_access_token, "token_type": "bearer"}
 
 
