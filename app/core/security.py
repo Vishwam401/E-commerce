@@ -59,7 +59,6 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
     to_encode = {'exp': expire, 'sub': str(subject), "type": "access"}
     logger.debug(f"[TOKEN_CREATE] Token payload: exp={expire}, sub={subject}, type=access")
     logger.debug(f"[TOKEN_CREATE] Using ALGORITHM: {settings.ALGORITHM}")
-    logger.debug(f"[TOKEN_CREATE] SECRET_KEY length: {len(settings.SECRET_KEY)}, first 15 chars: {settings.SECRET_KEY[:15]}")
 
     token = jwt.encode(
         to_encode,

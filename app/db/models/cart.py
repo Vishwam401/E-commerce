@@ -23,7 +23,7 @@ class Cart(Base):
         index=True
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     items: Mapped[list["CartItem"]] = relationship(
@@ -66,7 +66,7 @@ class CartItem(Base):
         default=1
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     cart: Mapped["Cart"] = relationship("Cart", back_populates="items")
