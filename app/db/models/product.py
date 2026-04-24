@@ -5,6 +5,7 @@ if TYPE_CHECKING:
 
 import uuid
 from typing import Optional, Dict, Any
+from decimal import Decimal
 from sqlalchemy import String, Text, Integer, ForeignKey, Boolean, Numeric, text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -48,7 +49,7 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     stock_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     attributes: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))

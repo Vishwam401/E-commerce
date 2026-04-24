@@ -1,16 +1,22 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any, Union, Tuple
-from jose import jwt, JWTError
-from app.core.config import settings
-from passlib.context import CryptContext
-import redis.asyncio as redis
-from redis.exceptions import RedisError
+from __future__ import annotations
+
 import logging
+from datetime import datetime, timedelta, timezone
+from typing import Any, Tuple, Union
+
+import redis.asyncio as redis
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from redis.exceptions import RedisError
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 # Argon2-only policy for all password hashes.
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
+# Shared Redis client used for token blacklist + rate limiting.
 redis_client = redis.Redis(
     host=settings.REDIS_HOST,
     port=settings.REDIS_PORT,
@@ -33,118 +39,96 @@ def verify_and_update_password(plain_password: str, hashed_password: str) -> Tup
 
 def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
     """
-    🔐 Create access token with detailed logging
+    Create access token with type=access.
 
-    Args:
-        subject: Usually username or user ID
-        expires_delta: Custom expiration time (defaults to settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    Returns:
-        JWT token string
+    Note: avoid logging token contents or secrets.
     """
-
     if not subject:
-        logger.error("[TOKEN_CREATE] ❌ Subject is None or empty!")
+        logger.error("[TOKEN_CREATE] Subject is None or empty")
         raise ValueError("Subject must not be None or empty.")
 
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
-        logger.debug(f"[TOKEN_CREATE] Using custom expires_delta: {expires_delta}")
     else:
-        expire = datetime.now(timezone.utc) + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
-        logger.debug(f"[TOKEN_CREATE] Using default ACCESS_TOKEN_EXPIRE_MINUTES: {settings.ACCESS_TOKEN_EXPIRE_MINUTES}")
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode = {'exp': expire, 'sub': str(subject), "type": "access"}
-    logger.debug(f"[TOKEN_CREATE] Token payload: exp={expire}, sub={subject}, type=access")
-    logger.debug(f"[TOKEN_CREATE] Using ALGORITHM: {settings.ALGORITHM}")
+    to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
+    token = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
-    token = jwt.encode(
-        to_encode,
-        settings.SECRET_KEY,
-        algorithm=settings.ALGORITHM
-    )
-
-    logger.info(f"[TOKEN_CREATE] ✅ Access token created for subject: {subject}")
-    logger.debug(f"[TOKEN_CREATE] Token created, length: {len(token)}, first 40 chars: {token[:40]}")
+    logger.info("[TOKEN_CREATE] Access token created")
     return token
 
 
 def create_refresh_token(subject: Union[str, Any]) -> str:
-    """🔐 Create refresh token valid for 7 days"""
+    """Create refresh token valid for 7 days."""
     expire = datetime.now(timezone.utc) + timedelta(days=7)
-    to_encode = {'exp': expire, 'sub': str(subject), 'type': 'refresh'}
-    logger.debug(f"[TOKEN_CREATE] Creating refresh token for subject: {subject}")
+    to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 async def blacklist_token(token: str, expiry: int):
-    """Add token to Redis blacklist (revoked tokens)"""
+    """Add token to Redis blacklist (revoked tokens)."""
     if not token:
-        logger.error("[TOKEN_BLACKLIST] ❌ Token is empty!")
+        logger.error("[TOKEN_BLACKLIST] Token is empty")
         raise ValueError("Token must not be empty.")
     if expiry <= 0:
-        logger.error("[TOKEN_BLACKLIST] ❌ Expiry time must be > 0")
+        logger.error("[TOKEN_BLACKLIST] Expiry time must be > 0")
         raise ValueError("Expiry time must be greater than zero.")
+
     try:
-        await redis_client.setex(name=token, time=expiry, value='blacklisted')
-        logger.info(f"[TOKEN_BLACKLIST] ✅ Token blacklisted for {expiry} seconds")
+        await redis_client.setex(name=token, time=expiry, value="blacklisted")
+        logger.info("[TOKEN_BLACKLIST] Token blacklisted")
     except RedisError as exc:
-        logger.error(f"[TOKEN_BLACKLIST] ❌ Redis write failed: {str(exc)}")
+        logger.error(f"[TOKEN_BLACKLIST] Redis write failed: {str(exc)}")
         raise RuntimeError("Redis blacklist write failed.") from exc
 
 
 async def is_token_blacklisted(token: str) -> bool:
-    """Check if token is in Redis blacklist"""
+    """Check if token is in Redis blacklist."""
     if not token:
-        logger.error("[TOKEN_CHECK_BLACKLIST] ❌ Token is empty!")
+        logger.error("[TOKEN_CHECK_BLACKLIST] Token is empty")
         raise ValueError("Token must not be empty.")
+
     try:
         res = await redis_client.get(token)
-        is_blacklisted = res == 'blacklisted'
+        is_blacklisted = res == "blacklisted"
         if is_blacklisted:
-            logger.warning("[TOKEN_CHECK_BLACKLIST] ⚠️ Token found in blacklist (revoked)")
-        else:
-            logger.debug("[TOKEN_CHECK_BLACKLIST] ✅ Token not in blacklist")
+            logger.warning("[TOKEN_CHECK_BLACKLIST] Token is blacklisted")
         return is_blacklisted
     except RedisError as exc:
-        logger.error(f"[TOKEN_CHECK_BLACKLIST] ❌ Redis read failed: {str(exc)}")
+        logger.error(f"[TOKEN_CHECK_BLACKLIST] Redis read failed: {str(exc)}")
         raise RuntimeError("Redis blacklist read failed.") from exc
 
 
 def get_token_ttl_seconds(token: str) -> int:
-    """Calculate remaining time-to-live for token"""
+    """Calculate remaining time-to-live for token."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         exp = payload.get("exp")
         if not isinstance(exp, (int, float)):
-            logger.error("[TOKEN_TTL] ❌ Invalid exp claim type")
+            logger.error("[TOKEN_TTL] Invalid exp claim type")
             raise JWTError("Invalid token expiry claim.")
+
         ttl = int(exp - datetime.now(timezone.utc).timestamp())
         if ttl <= 0:
-            logger.warning("[TOKEN_TTL] ❌ Token already expired")
+            logger.warning("[TOKEN_TTL] Token already expired")
             raise JWTError("Token already expired.")
-        logger.debug(f"[TOKEN_TTL] ✅ Token TTL: {ttl} seconds")
         return ttl
-    except JWTError as e:
-        logger.error(f"[TOKEN_TTL] ❌ JWT decode error: {str(e)}")
+    except JWTError as exc:
+        logger.error(f"[TOKEN_TTL] JWT decode error: {str(exc)}")
         raise
 
 
 def create_password_reset_token(email: str) -> str:
-    """Create password reset token valid for 15 minutes"""
+    """Create password reset token valid for 15 minutes."""
     expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
-    logger.debug(f"[TOKEN_CREATE] Creating password reset token for email: {email}")
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_verification_token(email: str)-> str:
-    """Create email verification token valid for 24 hours"""
-    expire = datetime.now(timezone.utc) + timedelta(hours = 24)
+def create_verification_token(email: str) -> str:
+    """Create email verification token valid for 24 hours."""
+    expire = datetime.now(timezone.utc) + timedelta(hours=24)
     to_encode = {"exp": expire, "sub": email, "type": "email_verification"}
-    logger.debug(f"[TOKEN_CREATE] Creating email verification token for email: {email}")
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-
 
