@@ -59,7 +59,7 @@ async def get_current_user(
 
     # ===== STEP 2: DECODE JWT TOKEN =====
     try:
-        logger.debug(f"[AUTH_FLOW] Decoding token with SECRET_KEY length: {len(settings.SECRET_KEY)}, first 15 chars: {settings.SECRET_KEY[:15]}")
+        logger.debug("[AUTH_FLOW] Decoding token (SECRET_KEY redacted)")
         logger.debug(f"[AUTH_FLOW] Token length: {len(token)}, first 30 chars: {token[:30]}")
         logger.debug(f"[AUTH_FLOW] Decoding with ALGORITHM: {settings.ALGORITHM}")
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
