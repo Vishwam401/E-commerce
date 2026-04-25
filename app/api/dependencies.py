@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import cast
 
@@ -68,6 +69,8 @@ async def get_current_user(
         if not isinstance(subject, str) or not subject:
             raise _unauthorized()
 
+        iat = payload.get("iat")
+
         exp = payload.get("exp")
         if exp and isinstance(exp, (int, float)):
             if float(exp) - datetime.now(timezone.utc).timestamp() <= 0:
@@ -76,11 +79,31 @@ async def get_current_user(
         logger.info(f"[AUTH] JWT decode failed: {str(exc)}")
         raise _unauthorized()
 
+
     # Step 3: user lookup + active check
-    result = await db.execute(select(User).where(User.username == subject))
+
+    # String username ko wapas UUID mein convert karke search karenge
+    try:
+        user_uuid = uuid.UUID(subject)
+    except ValueError:
+        logger.error(f"[AUTH] Subject is not a valid UUID: {subject}")
+        raise _unauthorized("Invalid token structure")
+
+    # Optimized Query: Searching by UUID instead of username
+    result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
+
     if not user:
         raise _unauthorized("User not found.")
+
+        # THE BIG FIX: Session Invalidation!
+        # Agar token banne ka time, password badalne ke time se purana hai, toh Reject!
+    if iat and user.password_changed_at:
+        token_issued_at = datetime.fromtimestamp(iat, timezone.utc)
+        if token_issued_at < user.password_changed_at:
+            logger.warning(f"[AUTH] Invalidated session accessed by {user.id}")
+            raise _unauthorized("Invalidated session. Please login again.")
+
 
     if not user.is_active:
         raise _unauthorized("Account is not active. Please verify your email.")

@@ -49,3 +49,13 @@ class ProductService:
             await db.commit()
             return True
         return False
+
+    @staticmethod
+    async def get_by_id(db: AsyncSession, product_id: uuid.UUID):
+        query = (
+            select(Product)
+            .where(Product.id == product_id, Product.is_deleted == False)
+            .execution_options(populate_existing=True)
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()

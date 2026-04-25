@@ -52,3 +52,20 @@ async def delete_product(
     if not success:
         raise HTTPException(status_code=404, detail="Product not found")
     return None # 204 No Content return karega
+
+
+@router.get("/{product_id}", response_model=ProductResponse)
+async def get_product(
+        product_id: uuid.UUID,
+        db: AsyncSession = Depends(deps.get_db)
+):
+    # Router ne Service ki static method call ki
+    product = await ProductService.get_by_id(db, product_id)
+
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bhai, ye product database mein nahi hai!"
+        )
+
+    return product

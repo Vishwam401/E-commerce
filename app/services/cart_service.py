@@ -10,10 +10,8 @@ from app.db.models.product import Product
 
 class CartService:
 
-
     @staticmethod
-    async def get_cart(db: AsyncSession, user_id:uuid.UUID)-> Cart:
-
+    async def get_cart(db: AsyncSession, user_id: uuid.UUID) -> Cart:
         query = (
             select(Cart)
             .where(Cart.user_id == user_id)
@@ -31,10 +29,58 @@ class CartService:
             await db.commit()
             db.expire(cart)
             await db.refresh(cart)
+            cart.items = []
+            return cart
 
-            cart.items=[]
+        # === THE GHOST PRODUCT FIX START ===
+        # Agar cart mein koi aisa item hai jiska product Admin ne delete kar diya hai,
+        # toh usko silently cart se hata do taaki app crash na ho.
+        valid_items = []
+        for item in cart.items:
+            # Check if product is None (hard deleted) OR is_deleted is True (soft deleted)
+            if item.product is None or item.product.is_deleted:
+                await db.delete(item)  # Clean the garbage from DB
+            else:
+                valid_items.append(item)
+
+        if len(valid_items) != len(cart.items):
+            await db.commit()  # Save the cleanup
+            cart.items = valid_items  # Update current memory
+        # === THE GHOST PRODUCT FIX END ===
 
         return cart
+
+    @staticmethod
+    async def update_cart_item_quantity(
+            db: AsyncSession,
+            user_id: uuid.UUID,
+            item_id: uuid.UUID,
+            quantity: int
+    ):
+        # === NEGATIVE QUANTITY FIX START ===
+        if quantity <= 0:
+            # Agar kisi ne 0 ya negative bheja, toh item hi uda do
+            return await CartService.remove_cart_item(db, user_id, item_id)
+        # === NEGATIVE QUANTITY FIX END ===
+
+        cart = await CartService.get_cart(db, user_id)
+
+        item = next((i for i in cart.items if i.id == item_id), None)
+        if not item:
+            raise HTTPException(status_code=404, detail="Cart item not found")
+
+        # Check stock
+        if item.product.stock_quantity < quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not Enough Stock! Only {item.product.stock_quantity} available."
+            )
+
+        item.quantity = quantity
+        await db.commit()
+
+        return await CartService.get_cart(db, user_id)
+
 
 
     @staticmethod
@@ -85,31 +131,6 @@ class CartService:
 
         return await CartService.get_cart(db, user_id)
 
-
-    @staticmethod
-    async def update_cart_item_quantity(
-            db: AsyncSession,
-            user_id: uuid.UUID,
-            item_id: uuid.UUID,
-            quantity: int
-    ):
-        cart = await CartService.get_cart(db, user_id)
-
-        item = next((i for i in cart.items if i.id == item_id), None)
-        if not item:
-            raise HTTPException(status_code=404, detail="Cart item not found")
-
-        # Check stock
-        if item.product.stock_quantity < quantity:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Not Enough Stock! Only {item.product.stock_quantity} available."
-            )
-
-        item.quantity = quantity
-        await db.commit()
-
-        return await CartService.get_cart(db, user_id)
 
 
     @staticmethod
