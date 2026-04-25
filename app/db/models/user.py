@@ -1,11 +1,13 @@
 from __future__ import annotations
 import uuid
 import re
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Optional
 from sqlalchemy import Column, String, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import validates, relationship, Mapped
 from sqlalchemy.sql import func
+from sqlalchemy.testing.schema import mapped_column
+
 from app.db.base import Base
 
 if TYPE_CHECKING:
@@ -30,6 +32,16 @@ class User(Base):
 
     # Perfect relationship mapping
     orders: Mapped[List["Order"]] = relationship("Order", back_populates="user")
+
+    # For Razorpay
+    phone_number: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        unique=True,
+        index=True,
+        nullable=True
+    )
+
+    full_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     @validates('email')
     def validate_email(self, key, address):
