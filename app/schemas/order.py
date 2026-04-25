@@ -30,4 +30,4 @@ class OrderOut(BaseModel):
         from_attributes = True
 
 class OrderCreate(BaseModel):
-    shipping_address: Optional[str] = None
+    address_id: Optional[str] = None

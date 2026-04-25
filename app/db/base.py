@@ -3,3 +3,5 @@ from app.db.models.user import User
 from app.db.models.product import Category, Product
 from app.db.models.cart import Cart, CartItem 
 from app.db.models.order import Order, OrderItem
+from app.db.models.address import Address
+from app.db.models.transaction import Transaction

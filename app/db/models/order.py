@@ -30,27 +30,32 @@ class OrderStatus(str, enum.Enum):
 class Order(Base):
     __tablename__ = "orders"
 
+    # 1. PRIMARY & FOREIGN KEYS
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    address_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("addresses.id", ondelete="SET NULL"), nullable=True)
 
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
-                                               nullable=False, index=True)
+    # 2. BUSINESS PRICING DATA
+    # Sabhi prices ek saath rakho taaki calculation logic samajhne mein aasani ho
+    subtotal_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal('0.00')) # Raw Product Total
+    tax_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal('0.00'))
+    shipping_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal('0.00'))
+    total_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal('0.00')) # Grand Total
 
-
-    total_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal('0.00'))
-
-    # 3. Enum mapped to DB
+    # 3. ORDER STATUS
     status: Mapped[OrderStatus] = mapped_column(SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
 
-    shipping_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # 4. ADDRESS SNAPSHOT (Critical for Data Integrity)
+    shipping_address_snapshot: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
-    # 4. Full Audit Trail
+    # 5. AUDIT TRAIL (Timestamps)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
-                                                 onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Relationships
+    # 6. RELATIONSHIPS
     user: Mapped[User] = relationship("User", back_populates="orders")
     items: Mapped[List[OrderItem]] = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+
 
 
 class OrderItem(Base):

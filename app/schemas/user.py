@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from datetime import datetime
 from uuid import UUID
 import re
+from typing import Optional
 
 
 def _validate_password_strength(value: str) -> str:
@@ -59,3 +60,27 @@ class PasswordResetConfirm(BaseModel):
     @classmethod
     def validate_new_password_strength(cls, value: str) -> str:
         return _validate_password_strength(value)
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_indian_phone(cls, v: str):
+        if v is None: return v
+
+        pattern = r"^(?:\+91|0)?[6-9]\d{9}$"
+        if not re.match(pattern, v):
+            raise ValueError("Invalid Indian Phone Number. Must be 10 digits.")
+
+        # Standardize: Always store as +91XXXXXXXXXX
+        clean_v = "".join(filter(str.isdigit, v))
+        if len(clean_v) == 10:
+            return f"+91{clean_v}"
+        elif len(clean_v) == 12 and clean_v.startswith("91"):
+            return f"+{clean_v}"
+        return v
+
+
