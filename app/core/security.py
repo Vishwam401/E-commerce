@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Tuple, Union
 
@@ -43,16 +44,26 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
 
     Note: avoid logging token contents or secrets.
     """
+
+    now = datetime.now(timezone.utc)
+    if expires_delta:
+        expire = now + expires_delta
+    else:
+        expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+
     if not subject:
         logger.error("[TOKEN_CREATE] Subject is None or empty")
         raise ValueError("Subject must not be None or empty.")
 
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
+    to_encode = {"exp": expire,
+                 "sub": str(subject),
+                 "type": "access",
+                 "jti": str(uuid.uuid4()),
+                 "iat": now.timestamp()
+                 }
+
     token = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
     logger.info("[TOKEN_CREATE] Access token created")
@@ -61,8 +72,16 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
 
 def create_refresh_token(subject: Union[str, Any]) -> str:
     """Create refresh token valid for 7 days."""
-    expire = datetime.now(timezone.utc) + timedelta(days=7)
-    to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(days=7)
+
+    to_encode = {"exp": expire,
+                 "sub": str(subject),
+                 "type": "refresh",
+                 "jti": str(uuid.uuid4()),
+                 "iat": now.timestamp()
+                 }
+
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
@@ -76,11 +95,20 @@ async def blacklist_token(token: str, expiry: int):
         raise ValueError("Expiry time must be greater than zero.")
 
     try:
-        await redis_client.setex(name=token, time=expiry, value="blacklisted")
-        logger.info("[TOKEN_BLACKLIST] Token blacklisted")
+        payload = jwt.decode(token , settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        jti = payload.get("jti")
+
+        if jti:
+             await redis_client.setex(name=token, time=expiry, value="blacklisted")
+             logger.info("[TOKEN_BLACKLIST] Token blacklisted")
+        else:
+            await redis_client.setex(name=token, time=expiry, value="blacklisted")
+
     except RedisError as exc:
-        logger.error(f"[TOKEN_BLACKLIST] Redis write failed: {str(exc)}")
-        raise RuntimeError("Redis blacklist write failed.") from exc
+        logger.critical(f"[TOKEN_BLACKLIST] Redis write failed: {str(exc)}")
+        pass
+    except JWTError:
+        pass
 
 
 async def is_token_blacklisted(token: str) -> bool:
@@ -90,14 +118,25 @@ async def is_token_blacklisted(token: str) -> bool:
         raise ValueError("Token must not be empty.")
 
     try:
-        res = await redis_client.get(token)
-        is_blacklisted = res == "blacklisted"
+        payload = jwt.decode(token , settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        jti = payload.get("jti")
+
+        if jti:
+            res = await redis_client.get(f"blacklist:jti:{jti}")
+            is_blacklisted = res == "true"
+        else:
+            res = await redis_client.get(token)
+            is_blacklisted = res == "blacklisted"
+
         if is_blacklisted:
             logger.warning("[TOKEN_CHECK_BLACKLIST] Token is blacklisted")
         return is_blacklisted
+
     except RedisError as exc:
         logger.error(f"[TOKEN_CHECK_BLACKLIST] Redis read failed: {str(exc)}")
         raise RuntimeError("Redis blacklist read failed.") from exc
+    except JWTError:
+        return True
 
 
 def get_token_ttl_seconds(token: str) -> int:
@@ -121,14 +160,28 @@ def get_token_ttl_seconds(token: str) -> int:
 
 def create_password_reset_token(email: str) -> str:
     """Create password reset token valid for 15 minutes."""
-    expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-    to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=15)
+    to_encode = {"exp": expire,
+                 "sub": email,
+                 "type": "password_reset",
+                 "jti": str(uuid.uuid4()),
+                 "iat": now.timestamp()
+                 }
+
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def create_verification_token(email: str) -> str:
     """Create email verification token valid for 24 hours."""
-    expire = datetime.now(timezone.utc) + timedelta(hours=24)
-    to_encode = {"exp": expire, "sub": email, "type": "email_verification"}
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(hours=24)
+    to_encode = {"exp": expire,
+                 "sub": email,
+                 "type": "email_verification",
+                 "jti": str(uuid.uuid4()),
+                 "iat": now.timestamp()
+                 }
+    
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 

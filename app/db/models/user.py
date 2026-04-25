@@ -19,6 +19,9 @@ class User(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(100), nullable=False)
+
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
+
     is_active = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
     is_deleted = Column(Boolean, default=False)

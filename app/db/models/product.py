@@ -22,8 +22,10 @@ class Category(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     slug: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
     parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey('categories.id', ondelete="CASCADE"), nullable=True, index=True
+        UUID(as_uuid=True), ForeignKey('categories.id', ondelete="SET NULL"), nullable=True, index=True
     )
+
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
 
     # Explicit self-referential mapping: one parent -> many sub-categories
     parent: Mapped[Optional["Category"]] = relationship(
