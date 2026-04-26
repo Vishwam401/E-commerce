@@ -5,19 +5,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from decimal import Decimal, ROUND_HALF_UP
 import uuid
 import logging
-
+import razorpay
+from razorpay.errors import SignatureVerificationError
+import asyncio
 from app.db.models.cart import Cart, CartItem
 from app.db.models.order import Order, OrderItem, OrderStatus
+from app.db.models.transaction import Transaction
 from app.db.models.product import Product
 from app.db.models.address import Address
+from app.core.config import settings
 
-
+client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID,settings.RAZORPAY_SECRET_KEY))
 logger = logging.getLogger(__name__)
 
 def round_money(amount: Decimal):
     return amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: str = None):
+async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: uuid.UUID):
     # Cart Fetch with Products
     stmt = select(Cart).where(Cart.user_id == user_id).options(
         selectinload(Cart.items).selectinload(CartItem.product)
@@ -97,6 +101,7 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: s
             db.add(OrderItem(
                 order_id=order_id,
                 product_id=c_item.product_id,
+                product_name = c_item.product.name,
                 quantity=c_item.quantity,
                 price_at_purchase=c_item.product.price
             ))
@@ -106,13 +111,56 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: s
 
         await db.commit()
 
-        # 5. Fetch final order object for response
+        # Razor Pay
+        amount_in_paise = int(grand_total * 100)
+
+        # Edge Case Protection
+        if amount_in_paise < 100:
+            raise HTTPException(status_code=400, detail="Minimum order amount must be at least ₹1")
+
+        order_data = {
+            "amount": amount_in_paise,
+            "currency": "INR",
+            "receipt": str(order_id),
+            "payment_capture": 1
+        }
+        #Running sync call in executor so fastAPI doesn't freeze
+        loop = asyncio.get_event_loop()
+        rzp_order = await loop.run_in_executor(
+            None, lambda : client.order.create(data=order_data)
+        )
+
+        if "id" not in rzp_order:
+            raise Exception("Razorpay order ID generation failed")
+
+        # save transaction in DB
+        new_transaction = Transaction(
+            order_id=order_id,
+            razorpay_order_id=rzp_order["id"],
+            amount=grand_total,
+            status="PENDING"
+        )
+        db.add(new_transaction)
+        await db.commit()
+
+        # 5. Fetch final order details
         final_stmt = (
             select(Order)
             .where(Order.id == order_id)
             .options(selectinload(Order.items).selectinload(OrderItem.product))
         )
-        return (await db.execute(final_stmt)).scalar_one()
+        final_order = (await db.execute(final_stmt)).scalar_one()
+
+        # return frontend friendly response
+        return {
+            "order": final_order,
+            "payment_details": {
+                "razorpay_order_id": rzp_order["id"],
+                "amount": rzp_order["amount"],
+                "currency": rzp_order["currency"],
+                "key": settings.RAZORPAY_KEY_ID
+            }
+        }
 
     except HTTPException:
         await db.rollback()
@@ -120,11 +168,11 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: s
     except Exception as e:
         await db.rollback()
         logger.error(f"Checkout Error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Checkout failed internally.")
+        raise HTTPException(status_code=502, detail="Checkout failed internally or gateway down.")
 
 
 async def get_user_orders(db: AsyncSession, user_id: uuid.UUID):
-    stmt = (select(Order).where(Order.user_id == user_id)
+    stmt = (select(Order).where(Order.user_id == user_id, Order.status == OrderStatus.PAID)
             .options(selectinload(Order.items).selectinload(OrderItem.product))
             .order_by(Order.created_at.desc()))
     result = await db.execute(stmt)
@@ -140,3 +188,66 @@ async def get_order_details(db: AsyncSession, order_id: uuid.UUID, user_id: uuid
     if not order:
         raise HTTPException(status_code=404, detail="Order nahi mila!")
     return order
+
+
+async def verify_razorpay_payment(
+        db: AsyncSession,
+        razorpay_order_id: str,
+        razorpay_payment_id: str,
+        razorpay_signature: str
+):
+    # 1. Fetch Transaction based on razorpay_order_id
+    stmt = select(Transaction).where(Transaction.razorpay_order_id == razorpay_order_id)
+    result = await db.execute(stmt)
+    transaction = result.scalar_one_or_none()
+
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction record not found!")
+
+    #2. Race Condition Fix: Check if already processed
+    if transaction.status == "SUCCESS":
+        return {"status": "success", "message": "Payment already verified."}
+
+    try:
+        # 3. SECURITY FIX: Verify Signature using Razorpay SDK
+        # SDK synchronous hai, so executor use kiya
+        payload = {
+            'razorpay_order_id': razorpay_order_id,
+            'razorpay_payment_id': razorpay_payment_id,
+            'razorpay_signature': razorpay_signature
+        }
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None, lambda: client.utility.verify_payment_signature(payload)
+        )
+        # Agar ye line cross hui , matlab Hacker nahi, real Razorpay ne bheja hai
+
+        # Atomic Database Update
+        # Update Transaction
+        transaction.status = "SUCCESS"
+        transaction.razorpay_payment_id = razorpay_payment_id
+        transaction.razorpay_signature = razorpay_signature
+
+        # Fetch and Update Order
+        order_stmt = select(Order).where(Order.id == transaction.order_id)
+        order_result = await db.execute(order_stmt)
+        order = order_result.scalar_one()
+        order.status = OrderStatus.PAID
+
+        await db.commit()  # Dono table ek sath update!
+
+        logger.info(f"Payment SUCCESS verified for Order: {order.id}")
+        return {"status": "success", "message": "Payment verified successfully", "order_id": order.id}
+
+    except SignatureVerificationError:
+        # HACKING ATTEMPT YA FAILED PAYMENT
+        transaction.status = "FAILED"
+        await db.commit()
+        logger.error(f"Signature mismatch for RZP_ORDER: {razorpay_order_id}. Possible fraud attempt.")
+        raise HTTPException(status_code=400, detail="Payment verification failed! Invalid signature.")
+
+    except Exception as e:
+            await db.rollback()
+            logger.error(f"Verification Error: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Internal server error during verification.")

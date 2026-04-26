@@ -42,6 +42,7 @@ class User(Base):
     )
 
     full_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    addresses = relationship("Address", back_populates="user", cascade="all, delete-orphan")
 
     @validates('email')
     def validate_email(self, key, address):

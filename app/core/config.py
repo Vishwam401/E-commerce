@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     MAIL_STARTTLS: bool
     MAIL_SSL_TLS: bool
     EMAIL_VERIFY_BASE_URL: str = "http://localhost:8001"
+    RAZORPAY_KEY_ID: str
+    RAZORPAY_SECRET_KEY: str
 
     model_config = SettingsConfigDict(env_file=".env.docker")
 

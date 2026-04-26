@@ -2,6 +2,7 @@ import re
 import uuid
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
+from app.db.models.address import AddressType
 
 
 
@@ -35,7 +36,14 @@ class AddressBase(BaseModel):
 
 # Create Schema: Address banane ke waqt
 class AddressCreate(AddressBase):
-    pass
+    full_name: str
+    phone_number: str
+    house_no: str
+    area: str
+    city: str
+    state: str
+    pincode: str
+    address_type: AddressType = AddressType.HOME
 
 
 # Update Schema: Address edit karne ke waqt
@@ -47,7 +55,7 @@ class AddressUpdate(BaseModel):
     city: Optional[str] = None
     house_no: Optional[str] = None
     area: Optional[str] = None
-    address_type: Optional[str] = None
+    address_type: Optional[AddressType] = None
     is_default: Optional[bool] = None
 
 
@@ -55,6 +63,7 @@ class AddressUpdate(BaseModel):
 class AddressResponse(AddressBase):
     id: uuid.UUID
     is_default: bool
+    user_id: uuid.UUID
 
     class Config:
         from_attributes = True
