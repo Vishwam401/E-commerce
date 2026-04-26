@@ -3,7 +3,13 @@ from sqlalchemy import String, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
+import enum
+from sqlalchemy import Enum as SQLEnum
 
+class AddressType(str, enum.Enum):
+    HOME = "home"
+    OFFICE = "office"
+    OTHER = "other"
 
 class Address(Base):
     __tablename__ = "addresses"
@@ -20,7 +26,11 @@ class Address(Base):
     house_no: Mapped[str] = mapped_column(String(255), nullable=False)
     area: Mapped[str] = mapped_column(String(255), nullable=False)
 
-    address_type: Mapped[str] = mapped_column(String(20), default="Home")
+    address_type: Mapped[AddressType] = mapped_column(
+        SQLEnum(AddressType, native_enum=False),
+        default=AddressType.HOME,
+        nullable=False
+    )
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)  # Soft Delete
 

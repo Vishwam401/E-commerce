@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional, TYPE_CHECKING
 
+from psycopg2._psycopg import Column
 from sqlalchemy import String, ForeignKey, DateTime, Integer, Numeric, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -75,3 +76,5 @@ class OrderItem(Base):
     # Relationships
     order: Mapped[Order] = relationship("Order", back_populates="items")
     product: Mapped[Product] = relationship("Product")
+
+    product_name: Mapped[str] = mapped_column(String, nullable=False)

@@ -4,14 +4,15 @@ from decimal import Decimal
 from typing import List, Optional
 from app.db.models.order import OrderStatus
 from app.schemas.product import ProductResponse
+import uuid
 
 
 class OrderItemOut(BaseModel):
-    id:UUID4
+
     product_id: UUID4
+    product_name: str
     quantity: int
     price_at_purchase: Decimal
-    product: Optional[ProductResponse] = None
 
     class Config:
         from_attributes = True
@@ -22,7 +23,7 @@ class OrderOut(BaseModel):
     user_id: UUID4
     total_price: Decimal
     status: OrderStatus
-    shipping_address: Optional[str] = None
+    shipping_address_snapshot: Optional[str] = None
     created_at: datetime
     items: List[OrderItemOut] = Field(default_factory=list)
 
@@ -31,3 +32,12 @@ class OrderOut(BaseModel):
 
 class OrderCreate(BaseModel):
     address_id: Optional[str] = None
+
+
+class CheckoutRequest(BaseModel):
+    address_id: uuid.UUID
+
+class PaymentVerifyRequest(BaseModel):
+    razorpay_order_id: str = Field(..., min_length=1)
+    razorpay_payment_id: str = Field(..., min_length=1)
+    razorpay_signature: str = Field(..., min_length=1)
