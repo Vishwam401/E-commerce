@@ -51,11 +51,9 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
     else:
         expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-
     if not subject:
         logger.error("[TOKEN_CREATE] Subject is None or empty")
         raise ValueError("Subject must not be None or empty.")
-
 
     to_encode = {"exp": expire,
                  "sub": str(subject),
@@ -85,6 +83,12 @@ def create_refresh_token(subject: Union[str, Any]) -> str:
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+# ✅ BUG FIX: Redis blacklist key format consistent kiya.
+# Pehle blacklist_token "token string" as key save karta tha,
+# aur is_token_blacklisted "blacklist:jti:{jti}" dhundta tha — hamesha miss hota tha.
+# Ab dono JTI-based key use karte hain: "blacklist:jti:{jti}"
+# Agar JTI nahi hai (purane tokens), fallback full token string pe hai.
+
 async def blacklist_token(token: str, expiry: int):
     """Add token to Redis blacklist (revoked tokens)."""
     if not token:
@@ -95,14 +99,17 @@ async def blacklist_token(token: str, expiry: int):
         raise ValueError("Expiry time must be greater than zero.")
 
     try:
-        payload = jwt.decode(token , settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         jti = payload.get("jti")
 
         if jti:
-             await redis_client.setex(name=token, time=expiry, value="blacklisted")
-             logger.info("[TOKEN_BLACKLIST] Token blacklisted")
+            # ✅ FIX: JTI-based key use karo — is_token_blacklisted se match karega
+            await redis_client.setex(name=f"blacklist:jti:{jti}", time=expiry, value="blacklisted")
         else:
+            # Fallback: purane tokens ke liye full token string key
             await redis_client.setex(name=token, time=expiry, value="blacklisted")
+
+        logger.info("[TOKEN_BLACKLIST] Token blacklisted successfully")
 
     except RedisError as exc:
         logger.critical(f"[TOKEN_BLACKLIST] Redis write failed: {str(exc)}")
@@ -118,12 +125,13 @@ async def is_token_blacklisted(token: str) -> bool:
         raise ValueError("Token must not be empty.")
 
     try:
-        payload = jwt.decode(token , settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         jti = payload.get("jti")
 
         if jti:
+            # ✅ FIX: Same key format as blacklist_token — ab match karega
             res = await redis_client.get(f"blacklist:jti:{jti}")
-            is_blacklisted = res == "true"
+            is_blacklisted = res == "blacklisted"  # ✅ FIX: value "blacklisted" check karo, "true" nahi
         else:
             res = await redis_client.get(token)
             is_blacklisted = res == "blacklisted"
@@ -182,6 +190,5 @@ def create_verification_token(email: str) -> str:
                  "jti": str(uuid.uuid4()),
                  "iat": now.timestamp()
                  }
-    
-    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)

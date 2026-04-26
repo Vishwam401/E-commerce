@@ -28,7 +28,8 @@ async def create_checkout(
     # Ye service function internally cart khali kar deta hai
     return await checkout_user_cart(db, current_user.id, request_data.address_id)
 
-# 2. Verify Payment (Logic: secure callback for razorpay
+# ✅ BUG FIX: current_user.id pass kiya verify_razorpay_payment mein.
+# Pehle user_id check nahi tha — koi bhi kisi ka bhi payment verify kar sakta tha.
 @router.post("/verify-payment", status_code=status.HTTP_200_OK)
 async def verify_payment(
         request_data: PaymentVerifyRequest,
@@ -37,6 +38,7 @@ async def verify_payment(
 ):
     return await verify_razorpay_payment(
         db=db,
+        user_id=current_user.id,
         razorpay_order_id=request_data.razorpay_order_id,
         razorpay_payment_id=request_data.razorpay_payment_id,
         razorpay_signature=request_data.razorpay_signature,

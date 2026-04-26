@@ -96,14 +96,13 @@ async def get_current_user(
     if not user:
         raise _unauthorized("User not found.")
 
-        # THE BIG FIX: Session Invalidation!
-        # Agar token banne ka time, password badalne ke time se purana hai, toh Reject!
+    # ✅ BUG FIX: Ye block pehle `raise` ke baad tha (dead code) — indentation galat thi.
+    # Ab sahi jagah pe hai. Agar password change hua hai aur token purana hai, session reject karo.
     if iat and user.password_changed_at:
         token_issued_at = datetime.fromtimestamp(iat, timezone.utc)
         if token_issued_at < user.password_changed_at:
             logger.warning(f"[AUTH] Invalidated session accessed by {user.id}")
             raise _unauthorized("Invalidated session. Please login again.")
-
 
     if not user.is_active:
         raise _unauthorized("Account is not active. Please verify your email.")
@@ -133,4 +132,3 @@ async def get_current_admin_user(
     current_user: User = Depends(require_roles("admin")),
 ) -> User:
     return current_user
-

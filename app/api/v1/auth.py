@@ -38,9 +38,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register_user(
-    user_in: UserCreate,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+        user_in: UserCreate,
+        background_tasks: BackgroundTasks,
+        db: AsyncSession = Depends(get_db),
 ):
     query = select(User).where(func.lower(User.email) == user_in.email.lower())
     result = await db.execute(query)
@@ -77,6 +77,7 @@ async def register_user(
             detail="Username or email already exists.",
         )
 
+
 @router.post("/resend-verification")
 async def resend_verification(
         email: str,
@@ -92,7 +93,7 @@ async def resend_verification(
         return {"detail": "If email exists, verification link sent,"}
 
     if user.is_active:
-        return{"detail": "Account already verified"}
+        return {"detail": "Account already verified"}
 
     # Rate limit check
     cooldown_key = f"email_cooldown:{email.lower()}"
@@ -186,6 +187,7 @@ async def login(
         "token_type": "bearer",
     }
 
+
 @router.post("/logout")
 async def logout(token: str = Depends(oauth2_scheme)):
     try:
@@ -241,14 +243,22 @@ async def admin_only_action(current_user: User = Depends(require_roles("admin"))
 
 
 @router.post("/forgot-password")
-async def forgot_password(data: PasswordResetCheck, db: AsyncSession = Depends(get_db)):
+async def forgot_password(
+        data: PasswordResetCheck,
+        background_tasks: BackgroundTasks,
+        db: AsyncSession = Depends(get_db)
+):
     result = await db.execute(select(User).where(func.lower(User.email) == data.email.lower()))
     user = result.scalar_one_or_none()
 
+    # ✅ BUG FIX: Pehle token banake "_" (discard) mein daal dete the — email kabhi send nahi hoti thi.
+    # "simulated" likh ke chod diya tha. Ab actual email send ho rahi hai background task se.
+    # Enumeration attack se bachne ke liye response same rehta hai chahe user ho ya na ho.
     if user:
-        _ = create_password_reset_token(data.email)
+        token = create_password_reset_token(data.email)
+        background_tasks.add_task(send_verification_email, user.email, token)
 
-    return {"detail": "If this email exists, a reset token has been generated (simulated)."}
+    return {"detail": "If this email exists, a password reset link has been sent."}
 
 
 @router.post("/reset-password")
@@ -326,5 +336,5 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
 
     ttl = get_token_ttl_seconds(token)
     await blacklist_token(token, expiry=ttl)
-    
+
     return {"detail": "congratulation Your Account is verified"}
