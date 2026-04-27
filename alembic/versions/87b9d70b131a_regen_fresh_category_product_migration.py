@@ -50,7 +50,6 @@ def upgrade() -> None:
     op.drop_constraint(op.f('products_category_id_fkey'), 'products', type_='foreignkey')
     op.create_foreign_key(None, 'products', 'categories', ['category_id'], ['id'], ondelete='SET NULL')
     op.drop_column('products', 'stock')
-    op.drop_column('products', 'image_url')
     op.alter_column('users', 'is_active',
                existing_type=sa.BOOLEAN(),
                nullable=True,
@@ -65,7 +64,6 @@ def downgrade() -> None:
                existing_type=sa.BOOLEAN(),
                nullable=False,
                existing_server_default=sa.text('false'))
-    op.add_column('products', sa.Column('image_url', sa.VARCHAR(), autoincrement=False, nullable=True))
     op.add_column('products', sa.Column('stock', sa.INTEGER(), autoincrement=False, nullable=True))
     op.drop_constraint(None, 'products', type_='foreignkey')
     op.create_foreign_key(op.f('products_category_id_fkey'), 'products', 'categories', ['category_id'], ['id'])

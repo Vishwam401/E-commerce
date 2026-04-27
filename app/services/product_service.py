@@ -75,7 +75,7 @@ class ProductService:
     @staticmethod
     async def update(db: AsyncSession, product_id: uuid.UUID, update_data: ProductUpdate):
         """
-        Admin partial update: price, stock_quantity, description, image_url, attributes.
+        Admin partial update: price, stock_quantity, description, attributes.
         Returns updated product or None if not found (including deleted products).
         """
         query = select(Product).where(Product.id == product_id)

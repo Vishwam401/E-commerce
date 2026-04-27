@@ -63,7 +63,6 @@ def upgrade() -> None:
     op.create_index(op.f('ix_products_category_id'), 'products', ['category_id'], unique=False)
     op.drop_constraint(op.f('products_category_id_fkey'), 'products', type_='foreignkey')
     op.create_foreign_key(None, 'products', 'categories', ['category_id'], ['id'], ondelete='SET NULL')
-    op.drop_column('products', 'image_url')
     op.drop_column('products', 'stock')
     op.alter_column('users', 'is_active',
                existing_type=sa.BOOLEAN(),
