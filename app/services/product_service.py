@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 import uuid
 from app.db.models.product import Product
-from app.schemas.product import ProductCreate
+from app.schemas.product import ProductCreate, ProductUpdate
 from app.services.utils import generate_unique_slug
 
 
@@ -27,6 +27,18 @@ class ProductService:
         query = (
             select(Product)
             .where(Product.is_deleted == False)
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await db.execute(query)
+        return result.scalars().all()
+
+    @staticmethod
+    async def get_all_admin(db: AsyncSession, skip: int = 0, limit: int = 20):
+        """Admin view: returns ALL products including soft-deleted ones."""
+        query = (
+            select(Product)
+            .order_by(Product.is_deleted.asc(), Product.name.asc())
             .offset(skip)
             .limit(limit)
         )
@@ -59,3 +71,24 @@ class ProductService:
         )
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def update(db: AsyncSession, product_id: uuid.UUID, update_data: ProductUpdate):
+        """
+        Admin partial update: price, stock_quantity, description, image_url, attributes.
+        Returns updated product or None if not found (including deleted products).
+        """
+        query = select(Product).where(Product.id == product_id)
+        result = await db.execute(query)
+        db_obj = result.scalar_one_or_none()
+
+        if not db_obj:
+            return None
+
+        patch = update_data.model_dump(exclude_unset=True)
+        for field, value in patch.items():
+            setattr(db_obj, field, value)
+
+        await db.commit()
+        await db.refresh(db_obj)
+        return db_obj
