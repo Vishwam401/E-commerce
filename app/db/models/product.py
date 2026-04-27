@@ -56,7 +56,7 @@ class Product(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     attributes: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
 
-    image_url: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
+
 
     category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey('categories.id', ondelete='SET NULL'), nullable=True, index=True

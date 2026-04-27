@@ -30,6 +30,10 @@ class OrderOut(BaseModel):
     class Config:
         from_attributes = True
 
+
+class OrderStatusUpdate(BaseModel):
+    new_status: OrderStatus = Field(..., description="Target order status")
+
 class OrderCreate(BaseModel):
     address_id: Optional[str] = None
 

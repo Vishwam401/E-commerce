@@ -1,4 +1,4 @@
-"""add image_url to products
+"""remove image_url from products
 
 Revision ID: a1b2c3d4e5f6
 Revises: 9617e4cbcd52
@@ -19,11 +19,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'products',
-        sa.Column('image_url', sa.String(length=2048), nullable=True),
-    )
+    pass
 
 
 def downgrade() -> None:
-    op.drop_column('products', 'image_url')
+    pass

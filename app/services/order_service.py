@@ -1,6 +1,6 @@
 from sqlalchemy import update, delete, select
 from sqlalchemy.orm import selectinload
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from decimal import Decimal, ROUND_HALF_UP
 import uuid
@@ -19,8 +19,20 @@ from app.db.models import Product
 client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_SECRET_KEY))
 logger = logging.getLogger(__name__)
 
+# State Machine: Ye rule banata hai ki kaunsa status kiske baad aa sakta hai
+VALID_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
+    OrderStatus.PENDING: {OrderStatus.PAID, OrderStatus.CANCELLED},
+    OrderStatus.PAID: {OrderStatus.PROCESSING, OrderStatus.CANCELLED},
+    OrderStatus.PROCESSING: {OrderStatus.SHIPPED, OrderStatus.CANCELLED},
+    OrderStatus.SHIPPED: {OrderStatus.DELIVERED},
+    OrderStatus.DELIVERED: set(),
+    OrderStatus.CANCELLED: set(),
+}
+
+
 def round_money(amount: Decimal):
     return amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
 
 async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: uuid.UUID):
     # Cart Fetch with Products
@@ -118,7 +130,8 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
             upd_result = await db.execute(stock_update_stmt)
 
             if upd_result.rowcount == 0:
-                raise HTTPException(status_code=400, detail=f"Stock conflict for '{c_item.product.name}'. Please try again.")
+                raise HTTPException(status_code=400,
+                                    detail=f"Stock conflict for '{c_item.product.name}'. Please try again.")
 
             # Create Order Item (Freeze price at time of purchase)
             db.add(OrderItem(
@@ -177,7 +190,6 @@ async def get_user_orders(
         limit: int = 10,
         offset: int = 0
 ) -> list[Order]:
-
     stmt = (
         select(Order)
         .where(Order.user_id == user_id)
@@ -190,7 +202,7 @@ async def get_user_orders(
         .offset(offset)
     )
     result = await db.execute(stmt)
-    #saclar_one_or_none() nahi use kre bcz list chaiye
+    # saclar_one_or_none() nahi use kre bcz list chaiye
     orders = result.scalars().all()
     return orders
 
@@ -274,13 +286,11 @@ async def verify_razorpay_payment(
         raise HTTPException(status_code=500, detail="Internal server error during payment verification.")
 
 
-
 async def process_order_cancellation(
         db: AsyncSession,
         order_id: uuid.UUID,
         user_id: uuid.UUID,
-)-> Order:
-
+) -> Order:
     stmt = (
         select(Order)
         .where(Order.id == order_id, Order.user_id == user_id)
@@ -305,7 +315,6 @@ async def process_order_cancellation(
                 status_code=400,
                 detail=f"Cannot cancel order in {order.status} status."
             )
-
 
         # ATOMIC stock rollback
         for items in order.items:
@@ -334,3 +343,70 @@ async def process_order_cancellation(
         await db.rollback()  # <--- IMPORTANT: Kuch bhi phate toh rollback!
         logger.exception(f"Failed to cancel order {order_id}")
         raise e
+
+
+# ===========================================================================
+# ADMIN SERVICE FUNCTIONS
+# ===========================================================================
+
+async def get_all_orders_admin(
+        db: AsyncSession,
+        order_status: OrderStatus | None = None,
+        skip: int = 0,
+        limit: int = 20
+) -> list[Order]:
+    """Admin ke liye saare platform ke orders lane ka logic"""
+    query = (
+        select(Order)
+        .options(selectinload(Order.items).selectinload(OrderItem.product))
+        .order_by(Order.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+
+    if order_status is not None:
+        query = query.where(Order.status == order_status)
+
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+async def update_order_status_admin(
+        db: AsyncSession,
+        order_id: uuid.UUID,
+        new_status: OrderStatus
+) -> Order:
+    """Order ka status check karke DB mein update karne ka logic (with state machine validation)"""
+    stmt = (
+        select(Order)
+        .where(Order.id == order_id)
+        .options(selectinload(Order.items).selectinload(OrderItem.product))
+    )
+    result = await db.execute(stmt)
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found.")
+
+    # Agar same status bhej diya toh wahi return kardo
+    if new_status == order.status:
+        return order
+
+    # State Machine validation
+    allowed = VALID_TRANSITIONS.get(order.status, set())
+    if new_status not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Invalid status transition: '{order.status.value}' → '{new_status.value}'. "
+                f"Allowed next states: {[s.value for s in allowed] or 'none (terminal state)'}."
+            ),
+        )
+
+    # DB update
+    order.status = new_status
+    await db.commit()
+    await db.refresh(order)
+
+    logger.info(f"Admin updated order id={order_id} status={order.status.value}→{new_status.value}")
+    return order
