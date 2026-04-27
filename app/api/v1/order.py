@@ -13,7 +13,8 @@ from app.services.order_service import (
     checkout_user_cart,
     get_user_orders,
     get_order_details,
-    verify_razorpay_payment
+    verify_razorpay_payment,
+    process_order_cancellation
 )
 
 router = APIRouter()
@@ -63,4 +64,14 @@ async def view_order(
     current_user: User = Depends(get_current_user)
 ):
     order = await get_order_details(db, order_id, current_user.id)
+    return order
+
+
+@router.patch("/{order_id}/cancel", response_model=OrderOut)
+async def cancel_order(
+    order_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    order = await process_order_cancellation(db, order_id, current_user.id)
     return order
