@@ -1,3 +1,5 @@
+from unittest import result
+
 from sqlalchemy import update, delete, select
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
@@ -11,9 +13,10 @@ import asyncio
 from app.db.models.cart import Cart, CartItem
 from app.db.models.order import Order, OrderItem, OrderStatus
 from app.db.models.transaction import Transaction
-from app.db.models.product import Product
+
 from app.db.models.address import Address
 from app.core.config import settings
+from app.db.models import Product
 
 client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_SECRET_KEY))
 logger = logging.getLogger(__name__)
@@ -255,3 +258,65 @@ async def verify_razorpay_payment(
         await db.rollback()
         logger.error(f"Verification Error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error during payment verification.")
+
+
+
+async def process_order_cancellation(
+        db: AsyncSession,
+        order_id: uuid.UUID,
+        user_id: uuid.UUID,
+)-> Order:
+
+    stmt = (
+        select(Order)
+        .where(Order.id == order_id, Order.user_id == user_id)
+        .options(
+            selectinload(Order.items).selectinload(OrderItem.product)
+        )
+        .with_for_update()
+    )
+
+    try:
+        result = await db.execute(stmt)
+        order = result.scalar_one_or_none()
+
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found.")
+
+        if order.status == OrderStatus.CANCELLED:
+            return order
+
+        if order.status in [OrderStatus.SHIPPED, OrderStatus.DELIVERED]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot cancel order in {order.status} status."
+            )
+
+
+        # ATOMIC stock rollback
+        for items in order.items:
+            if not items.product:
+                logger.error(f"INTEGRITY ERROR: Product missing for OrderItem {items.id}")
+                raise HTTPException(status_code=500, detail="Data integrity error")
+
+            # memory mai update krne ki jagah sidha db mai query run kri hai
+            await db.execute(
+                update(Product)
+                .where(Product.id == items.product_id)
+                .values(stock_quantity=Product.stock_quantity + items.quantity)
+            )
+
+        # order status update
+        order.status = OrderStatus.CANCELLED
+
+        # final commit
+        await db.commit()
+        await db.refresh(order)
+
+        logger.info(f"Order {order_id} successfully cancelled by user {user_id}")
+        return order
+
+    except Exception as e:
+        await db.rollback()  # <--- IMPORTANT: Kuch bhi phate toh rollback!
+        logger.exception(f"Failed to cancel order {order_id}")
+        raise e

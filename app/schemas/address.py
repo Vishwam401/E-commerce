@@ -14,7 +14,7 @@ class AddressBase(BaseModel):
     city: str = Field(..., min_length=2, max_length=50)
     house_no: str = Field(..., min_length=1, max_length=255)
     area: str = Field(..., min_length=2, max_length=255)
-    address_type: str = Field("Home", examples=["Home", "Office"])
+    address_type: AddressType = AddressType.HOME
 
     # === SECURITY & INTEGRITY CHECK: Phone Number ===
     @field_validator("phone_number")
@@ -64,6 +64,7 @@ class AddressResponse(AddressBase):
     id: uuid.UUID
     is_default: bool
     user_id: uuid.UUID
+
 
     class Config:
         from_attributes = True
