@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 from app.db.models.order import OrderStatus
-from app.schemas.product import ProductResponse
+
 import uuid
 
 

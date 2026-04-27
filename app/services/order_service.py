@@ -1,5 +1,3 @@
-from unittest import result
-
 from sqlalchemy import update, delete, select
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
@@ -173,12 +171,28 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
         raise HTTPException(status_code=502, detail="Checkout failed. Please try again.")
 
 
-async def get_user_orders(db: AsyncSession, user_id: uuid.UUID):
-    stmt = (select(Order).where(Order.user_id == user_id, Order.status == OrderStatus.PAID)
-            .options(selectinload(Order.items).selectinload(OrderItem.product))
-            .order_by(Order.created_at.desc()))
+async def get_user_orders(
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        limit: int = 10,
+        offset: int = 0
+) -> list[Order]:
+
+    stmt = (
+        select(Order)
+        .where(Order.user_id == user_id)
+        .options(
+            selectinload(Order.items)
+            .selectinload(OrderItem.product)
+        )
+        .order_by(Order.created_at.desc())  # Latest orders pehle
+        .limit(limit)
+        .offset(offset)
+    )
     result = await db.execute(stmt)
-    return result.scalars().all()
+    #saclar_one_or_none() nahi use kre bcz list chaiye
+    orders = result.scalars().all()
+    return orders
 
 
 async def get_order_details(db: AsyncSession, order_id: uuid.UUID, user_id: uuid.UUID):
