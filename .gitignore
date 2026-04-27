@@ -23,3 +23,8 @@ DOCKER_HINGLISH_GUIDE.md
 REVISION_NOTES.md
 FILES_MODIFIED.txt
 AUTHENTICATION_GUIDE.md
+test_sig.py
+
+# Ignore test and cache folders
+.pytest_cache/
+.hypothesis/
