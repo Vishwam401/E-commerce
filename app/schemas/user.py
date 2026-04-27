@@ -42,6 +42,9 @@ class UserCreate(UserBase):
 
 class UserOut(UserBase):
     id: UUID
+    email: EmailStr
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
     is_active: bool = Field(default=False)
     is_admin: bool = Field(default=False)
     created_at: datetime
@@ -63,7 +66,10 @@ class PasswordResetConfirm(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    full_name: Optional[str] = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    full_name: Optional[str] = Field(None, min_length=3, max_length=50)
+    email: Optional[EmailStr] = None
     phone_number: Optional[str] = None
 
     @field_validator("phone_number")
