@@ -38,5 +38,19 @@ services:
       - "6379"
     restart: always
 
+  # --- Celery Worker Container (Email tasks execute karega!) ---
+  celery_worker:
+    build: .
+    container_name: ecommerce_celery_worker
+    env_file:
+      - .env.docker
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    restart: always
+
 volumes:
   postgres_data:
