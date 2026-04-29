@@ -5,11 +5,12 @@
   <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python" />
   <img src="https://img.shields.io/badge/PostgreSQL-15-4169E1?style=for-the-badge&logo=postgresql" />
   <img src="https://img.shields.io/badge/Redis-Alpine-DC382D?style=for-the-badge&logo=redis" />
-  <img src="https://img.shields.io/badge/Razorpay-Live-02042B?style=for-the-badge&logo=razorpay" />
+  <img src="https://img.shields.io/badge/Razorpay-Webhook-02042B?style=for-the-badge&logo=razorpay" />
+  <img src="https://img.shields.io/badge/Celery-Active-37814A?style=for-the-badge&logo=celery" />
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker" />
 </p>
 
-A production-grade, async FastAPI e-commerce backend featuring a secure multi-layer JWT auth system, full cart and order lifecycle, live Razorpay payment integration, order cancellation with atomic stock rollback, a complete admin panel, user profile management, and a Docker-first local setup.
+A production-grade, async FastAPI e-commerce backend featuring a secure multi-layer JWT auth system, full cart and order lifecycle, live Razorpay payment integration with a complete server-side webhook handler, Celery-powered async invoice emails, order cancellation with atomic stock rollback, a complete admin panel, user profile management, and a Docker-first local setup.
 
 ---
 
@@ -19,6 +20,8 @@ A production-grade, async FastAPI e-commerce backend featuring a secure multi-la
 - [Architecture & Project Structure](#architecture--project-structure)
 - [Authentication System — Deep Dive](#authentication-system--deep-dive)
 - [Razorpay Payment Flow](#razorpay-payment-flow)
+- [Razorpay Webhook Handler](#razorpay-webhook-handler)
+- [Celery Async Task — Invoice Email](#celery-async-task--invoice-email)
 - [Order State Machine](#order-state-machine)
 - [Admin Panel](#admin-panel)
 - [API Endpoints Reference](#api-endpoints-reference)
@@ -100,6 +103,24 @@ A production-grade, async FastAPI e-commerce backend featuring a secure multi-la
 - On verified payment: `Transaction.status → SUCCESS`, `Order.status → PAID` updated atomically
 - On failed signature: `Transaction.status → FAILED` is recorded; fraud attempt logged with warning
 
+### 🔔 Razorpay Webhook Handler *(New)*
+- **Complete server-side payment confirmation** via `POST /api/v1/webhooks/razorpay`
+- **Immediate audit logging** — every incoming event is persisted to `webhook_events` table *before* any business logic runs, ensuring no event is ever lost
+- **HMAC-SHA256 signature verification** — raw request body hashed with `RAZORPAY_WEBHOOK_SECRET`; invalid signatures raise an exception and are logged
+- **Idempotency guard** — duplicate `payment.captured` events for an already-`SUCCESS` transaction are short-circuited safely
+- **`payment.captured` event handling** — atomically updates `Transaction.status → SUCCESS` and `Order.status → PAID` in a single commit
+- **`order.paid` event** — recognized and extensible for future handling
+- **Isolation from email failures** — invoice email is queued via Celery *after* the DB commit; email queue failures log a warning but never roll back a completed payment
+- **Dual-column `webhook_events` table** — `processed` flag toggled only after successful business logic, enabling retry identification
+- Always returns `200 OK` to Razorpay even on business-logic errors (`error_logged` status) to prevent unnecessary retries from the gateway
+
+### ⚙️ Celery Async Task — Invoice Email *(Active)*
+- **HTML invoice email** dispatched as a Celery background task after every confirmed payment (both via `/verify-payment` and webhook)
+- Email renders: Order ID, User ID, and total amount paid in a styled receipt template
+- **Auto-retry on failure** — Celery retries up to 3 times with a 60-second countdown on SMTP or network errors (`bind=True, max_retries=3, countdown=60`)
+- Fully decoupled from the payment commit — email failures never affect payment status
+- Celery broker and result backend both backed by the existing authenticated Redis instance
+
 ### 📍 Address Book
 - Full CRUD with **soft delete** — addresses used in past orders are never hard-deleted
 - `AddressType` enum — `home`, `office`, `other` (enforced at DB level via `SQLEnum`)
@@ -113,7 +134,7 @@ A production-grade, async FastAPI e-commerce backend featuring a secure multi-la
 - **Async SQLAlchemy** with `asyncpg` driver throughout
 - **Alembic** migration support for modular schema evolution
 - **System-wide structured logging** via `logging_config.py`
-- **Celery** worker infrastructure scaffolded for future async task support
+- **Celery** worker infrastructure with active async task support (invoice email delivery)
 - **Schemathesis** + **pytest** in dependencies for API contract testing
 
 ---
@@ -136,9 +157,10 @@ E-Commerce/
 │   │       ├── order.py              # Checkout, verify-payment, cancel, order history
 │   │       ├── address.py            # Address book endpoints
 │   │       ├── users.py              # User profile & personal order history  ← New
-│   │       └── admin.py              # Admin panel — products & orders         ← New
+│   │       ├── admin.py              # Admin panel — products & orders         ← New
+│   │       └── webhooks.py           # Razorpay webhook receiver               ← New
 │   ├── core/
-│   │   ├── config.py                 # Pydantic settings (env-driven, incl. Razorpay)
+│   │   ├── config.py                 # Pydantic settings (env-driven, incl. Razorpay + Webhook)
 │   │   ├── redis.py                  # Redis client + rate limiting logic
 │   │   ├── security.py               # JWT creation, blacklist, Argon2 hashing
 │   │   └── logging_config.py         # Structured logging setup
@@ -149,7 +171,8 @@ E-Commerce/
 │   │   │   ├── cart.py               # Cart, CartItem
 │   │   │   ├── order.py              # Order, OrderItem, OrderStatus enum
 │   │   │   ├── address.py            # Address, AddressType enum
-│   │   │   └── transaction.py        # Razorpay Transaction
+│   │   │   ├── transaction.py        # Razorpay Transaction
+│   │   │   └── webhook_event.py      # WebhookEvent audit log                 ← New
 │   │   ├── base.py
 │   │   ├── base_class.py
 │   │   └── session.py                # Async session factory + get_db
@@ -166,11 +189,13 @@ E-Commerce/
 │   │   ├── category_service.py       # CatalogService
 │   │   ├── address_service.py        # AddressService (default, soft delete)
 │   │   ├── user_service.py           # update_user_profile (with row lock)      ← New
+│   │   ├── webhook_service.py        # RazorpayWebhookService (verify + handle) ← New
 │   │   └── utils.py
 │   ├── utils/
 │   │   └── email.py                  # FastAPI-Mail background email sender
 │   ├── worker/
-│   │   └── celery_app.py             # Celery app instance (scaffolded)
+│   │   ├── celery_app.py             # Celery app instance (Redis broker + backend)
+│   │   └── tasks.py                  # send_invoice_email Celery task           ← New
 │   └── main.py                       # FastAPI app, all router registrations
 ├── docker-compose.yml
 ├── Dockerfile
@@ -278,6 +303,84 @@ POST /api/v1/orders/verify-payment
   ├── SUCCESS → Transaction=SUCCESS, Order=PAID, db.commit()
   └── FAILURE → Transaction=FAILED, log fraud warning, raise 400
 ```
+
+---
+
+## Razorpay Webhook Handler
+
+Razorpay can send server-side payment events independently of the frontend flow. This handler ensures payments are confirmed and emails are sent even if the user closes the browser after paying.
+
+```
+POST /api/v1/webhooks/razorpay
+  (No auth required — public endpoint, secured by HMAC signature)
+
+  ├── 1. AUDIT LOG FIRST
+  │   → Parse raw body as JSON
+  │   → Write WebhookEvent(event_type, payload, processed=False) to DB
+  │   → db.commit() immediately — event is never lost
+  │
+  ├── 2. SIGNATURE VERIFICATION
+  │   → HMAC-SHA256(raw_body, RAZORPAY_WEBHOOK_SECRET)
+  │   → hmac.compare_digest() — safe against timing attacks
+  │   → Mismatch? → raise Exception("Hacker Attack Attempted") → logged, return error_logged
+  │
+  ├── 3. EVENT ROUTING (event_type)
+  │   ├── "payment.captured"
+  │   │   → Extract razorpay_order_id from payload.payment.entity
+  │   │   → call handle_payment_success()
+  │   ├── "order.paid"
+  │   │   → Recognized, extensible for future logic
+  │   └── anything else
+  │       → Logged as ignored, no action
+  │
+  ├── 4. handle_payment_success()
+  │   → Lookup Transaction by razorpay_order_id
+  │   → IDEMPOTENCY CHECK: already SUCCESS? → return True (no duplicate processing)
+  │   → ATOMIC UPDATE:
+  │       transaction.status = "SUCCESS"
+  │       transaction.razorpay_payment_id = payment_entity["id"]
+  │       order.status = OrderStatus.PAID
+  │       db.commit()  ← single commit
+  │   → AFTER COMMIT: queue Celery invoice email (failures won't rollback payment)
+  │
+  └── 5. MARK PROCESSED
+      → webhook_log.processed = True
+      → db.commit()
+      → return {"status": "ok"}
+```
+
+### WebhookEvent Model
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | UUID | Primary key |
+| `event_type` | String | Indexed — e.g. `payment.captured` |
+| `payload` | JSONB | Full raw event stored for audit/replay |
+| `processed` | Boolean | `False` on arrival, `True` after successful handling |
+| `created_at` | DateTime | Auto-set at insert |
+
+---
+
+## Celery Async Task — Invoice Email
+
+After every confirmed payment (via webhook or `/verify-payment`), an HTML invoice email is dispatched as a non-blocking Celery background task.
+
+```
+send_invoice_email.delay(
+    user_email=...,
+    user_id=...,
+    order_id=...,
+    amount=...
+)
+```
+
+- **Task name:** `send_invoice_email`
+- **Broker & backend:** Redis (same authenticated instance as token blacklist)
+- **Retry policy:** `max_retries=3`, `countdown=60` seconds between retries
+- **Template:** Styled HTML receipt with Order ID, User ID, and total paid
+- **Subject:** `Payment Receipt - Order #<last 6 chars of order_id>`
+- **SMTP:** Synchronous `smtplib` (Celery-safe) with optional STARTTLS support
+- **Failure isolation:** Email queue errors are logged as warnings; the payment DB state is never rolled back
 
 ---
 
@@ -406,6 +509,12 @@ All admin routes are under `/api/v1/admin` and require `require_roles("admin")`.
 | `PATCH` | `/api/v1/addresses/{id}/default` | Bearer | Set as default |
 | `DELETE` | `/api/v1/addresses/{id}` | Bearer | Soft-delete address |
 
+### Webhooks — `/api/v1/webhooks` *(New)*
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/v1/webhooks/razorpay` | HMAC Signature | Receive Razorpay payment events |
+
 ---
 
 ## Data Models
@@ -459,6 +568,14 @@ All admin routes are under `/api/v1/admin` and require `require_roles("admin")`.
 | `razorpay_signature` | Stored for audit trail |
 | `status` | `PENDING` → `SUCCESS` / `FAILED` |
 
+### WebhookEvent *(New)*
+| Field | Notes |
+|-------|-------|
+| `event_type` | Indexed string — e.g. `payment.captured` |
+| `payload` | Full raw JSONB event for audit and replay |
+| `processed` | `False` on arrival; `True` after successful handling |
+| `created_at` | Auto-set at insert |
+
 ---
 
 ## Local Setup (Docker)
@@ -501,6 +618,7 @@ EMAIL_VERIFY_BASE_URL=http://192.168.x.x:8001
 # Razorpay (get from razorpay.com/app/keys)
 RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxx
 RAZORPAY_SECRET_KEY=your_razorpay_secret
+RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret
 ```
 
 ### 3. Start all services
@@ -544,6 +662,7 @@ docker compose exec api alembic upgrade head
 | `EMAIL_VERIFY_BASE_URL` | ✅ | Base URL for verification links |
 | `RAZORPAY_KEY_ID` | ✅ | Razorpay API key ID |
 | `RAZORPAY_SECRET_KEY` | ✅ | Razorpay secret key |
+| `RAZORPAY_WEBHOOK_SECRET` | ✅ | Razorpay webhook secret (from Dashboard → Webhooks) |
 
 ---
 
@@ -557,10 +676,11 @@ docker compose exec api alembic upgrade head
 6. **Add address** → `POST /api/v1/addresses/`
 7. **Add items to cart** → `POST /api/v1/cart/items`
 8. **Checkout** → `POST /api/v1/orders/checkout`, get `razorpay_order_id`
-9. **Verify payment** → `POST /api/v1/orders/verify-payment`
-10. **Cancel order** → `PATCH /api/v1/orders/{id}/cancel` (only PENDING/PAID/PROCESSING)
-11. **Admin: update order status** → `PATCH /api/v1/admin/orders/{id}/status`
-12. **Rate limit test** → 6+ bad login attempts → `429`; wait 60s → works again
+9. **Verify payment** → `POST /api/v1/orders/verify-payment` → invoice email queued via Celery
+10. **Webhook test** → `POST /api/v1/webhooks/razorpay` with valid `x-razorpay-signature` header → event logged + order marked PAID
+11. **Cancel order** → `PATCH /api/v1/orders/{id}/cancel` (only PENDING/PAID/PROCESSING)
+12. **Admin: update order status** → `PATCH /api/v1/admin/orders/{id}/status`
+13. **Rate limit test** → 6+ bad login attempts → `429`; wait 60s → works again
 
 ---
 
@@ -578,7 +698,8 @@ docker compose exec api alembic upgrade head
 | JWT | python-jose |
 | Email | FastAPI-Mail / SMTP |
 | Payments | Razorpay SDK |
-| Task Queue | Celery (scaffolded) |
+| Webhooks | HMAC-SHA256 (standard library `hmac`) |
+| Task Queue | Celery (active — invoice email delivery) |
 | Containerization | Docker / Docker Compose |
 | Validation | Pydantic v2 |
 | Testing | pytest, Schemathesis |
@@ -599,10 +720,10 @@ docker compose exec api alembic upgrade head
 - [x] Admin Panel — product & order management
 - [x] Order state machine with validated transitions
 - [x] User Profile — fetch & update with phone validation
-- [ ] Razorpay webhook handler (server-side payment confirmation)
+- [x] Razorpay webhook handler — server-side payment confirmation with audit log
+- [x] Celery async tasks — HTML invoice email on payment confirmation
 - [ ] Redis-backed cart caching
 - [ ] Coupon & discount engine
-- [ ] Celery async tasks (email, order processing)
 - [ ] Sentry error tracking integration
 
 ---
