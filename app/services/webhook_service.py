@@ -8,6 +8,8 @@ from sqlalchemy.future import select
 from app.core.config import settings
 from app.db.models.transaction import Transaction
 from app.db.models.order import Order
+from app.worker.tasks import send_invoice_email
+from app.db.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +58,7 @@ class RazorpayWebhookService:
             payment_entity = data["payload"]["payment"]["entity"]
             razorpay_order_id = payment_entity.get("order_id")
 
-           
+
             await cls.handle_payment_success(db, razorpay_order_id, payment_entity)
 
         elif event_type == "order.paid":
@@ -101,7 +103,7 @@ class RazorpayWebhookService:
             transaction.status = "SUCCESS"
             transaction.razorpay_order_id = payment_entity.get("id")
 
-            # 2. find order table and then update it
+            # 2. Find order table and update status
             order_stmt = select(Order).where(Order.id == transaction.order_id)
             order_result = await db.execute(order_stmt)
             order = order_result.scalar_one_or_none()
@@ -109,14 +111,26 @@ class RazorpayWebhookService:
             if order:
                 order.status = "PAID"
 
-            # 3: Dono changes ko ek saath database mein save (commit) karo
+
+                # Order ke andar user_id hai, usse hum User table mein query marenge
+                user_stmt = select(User).where(User.id == order.user_id)
+                user_result = await db.execute(user_stmt)
+                real_user = user_result.scalar_one_or_none()
+
+                if real_user and real_user.email:
+                    # THE CELERY TRIGGER: Asli email bhejo
+                    send_invoice_email.delay(user_email=real_user.email, user_id=str(real_user.id), order_id=str(order.id), amount=float(order.total_price))
+                    logger.info(f"Celery Task Triggered for Order {order.id} to {real_user.email}")
+                else:
+                    logger.error(f"User ya User ki email nahi mili Order {order.id} ke liye! Email skip ho gayi.")
+
+            # 3: Dono changes ko ek saath database mein save karo
             await db.commit()
             logger.info(f"Order {order.id} is officially PAID in database.")
 
             return True
 
         except Exception as e:
-            # Agar A ya B step mein kuch bhi fasa, toh ROLLBACK kardo
             await db.rollback()
-            logger.error(f" Database update fail ho gaya: {str(e)}")
+            logger.error(f"Database update fail ho gaya: {str(e)}")
             raise e
