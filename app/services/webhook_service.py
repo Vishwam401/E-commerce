@@ -7,7 +7,7 @@ from sqlalchemy.future import select
 
 from app.core.config import settings
 from app.db.models.transaction import Transaction
-from app.db.models.order import Order
+from app.db.models.order import Order, OrderStatus
 from app.worker.tasks import send_invoice_email
 from app.db.models.user import User
 
@@ -87,21 +87,16 @@ class RazorpayWebhookService:
             logger.error(f"Transaction not found: {razorpay_order_id}")
             return False
 
-        # ----------------------------------------------------
-        # 🛡️ THE IDEMPOTENCY CHECK (Duplicate rokna)
-        # ----------------------------------------------------
-
+        # 🛡THE IDEMPOTENCY CHECK (Duplicate rokna)
         if transaction.status == "SUCCESS":
             logger.info(f"Idempotency: Order {razorpay_order_id} already PAID")
             return True
 
-        # ----------------------------------------------------
-        # ⚛️ THE ATOMIC TRANSACTION (Dono update ya ek bhi nahi)
-        # ----------------------------------------------------
+        # ⚛THE ATOMIC TRANSACTION (Dono update ya ek bhi nahi)
         try:
             # 1. Update Transaction Table
             transaction.status = "SUCCESS"
-            transaction.razorpay_order_id = payment_entity.get("id")
+            transaction.razorpay_payment_id = payment_entity.get("id")
 
             # 2. Find order table and update status
             order_stmt = select(Order).where(Order.id == transaction.order_id)
@@ -109,24 +104,31 @@ class RazorpayWebhookService:
             order = order_result.scalar_one_or_none()
 
             if order:
-                order.status = "PAID"
+                order.status = OrderStatus.PAID
 
-
-                # Order ke andar user_id hai, usse hum User table mein query marenge
-                user_stmt = select(User).where(User.id == order.user_id)
-                user_result = await db.execute(user_stmt)
-                real_user = user_result.scalar_one_or_none()
-
-                if real_user and real_user.email:
-                    # THE CELERY TRIGGER: Asli email bhejo
-                    send_invoice_email.delay(user_email=real_user.email, user_id=str(real_user.id), order_id=str(order.id), amount=float(order.total_price))
-                    logger.info(f"Celery Task Triggered for Order {order.id} to {real_user.email}")
-                else:
-                    logger.error(f"User ya User ki email nahi mili Order {order.id} ke liye! Email skip ho gayi.")
-
-            # 3: Dono changes ko ek saath database mein save karo
+            # 3: Dono changes ko ek saath database mein save karo (COMMIT FIRST!)
             await db.commit()
             logger.info(f"Order {order.id} is officially PAID in database.")
+
+            # 4. ONLY AFTER COMMIT - Try to send email (failures won't block payment)
+            try:
+                if order and order.user_id:
+                    user_stmt = select(User).where(User.id == order.user_id)
+                    user_result = await db.execute(user_stmt)
+                    real_user = user_result.scalar_one_or_none()
+
+                    if real_user and real_user.email:
+                        logger.info(f"Queuing invoice email for {real_user.email}")
+                        send_invoice_email.delay(
+                            user_email=real_user.email,
+                            user_id=str(real_user.id),
+                            order_id=str(order.id),
+                            amount=float(order.total_price)
+                        )
+                        logger.info(f"✉Celery Task Queued for Order {order.id}")
+            except Exception as email_error:
+                # Email queue failure - log it but DON'T fail the payment!
+                logger.warning(f"⚠️ Email queue failed (payment ALREADY SAVED): {str(email_error)}")
 
             return True
 
