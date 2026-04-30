@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from redis.exceptions import RedisError
@@ -25,6 +25,17 @@ from app.core.security import (
     verify_and_update_password,
     is_token_blacklisted,
 )
+from app.core.exceptions import (
+    ConflictError,
+    RateLimitError,
+    AuthenticationError,
+    AccountInactiveError,
+    TokenCompromisedError,
+    InvalidTokenError,
+    SessionInvalidatedError,
+    ServiceUnavailableError,
+    NotFoundError,
+)
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.user import PasswordResetCheck, PasswordResetConfirm, UserCreate, UserOut
@@ -38,9 +49,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register_user(
-        user_in: UserCreate,
-        background_tasks: BackgroundTasks,
-        db: AsyncSession = Depends(get_db),
+    user_in: UserCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
 ):
     query = select(User).where(func.lower(User.email) == user_in.email.lower())
     result = await db.execute(query)
@@ -48,10 +59,7 @@ async def register_user(
 
     if existing_user:
         logger.info("[REGISTER] Email already exists")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User with this email already exists.",
-        )
+        raise ConflictError("User with this email already exists.")
 
     hashed_password = get_password_hash(user_in.password)
     new_user = User(
@@ -72,114 +80,84 @@ async def register_user(
     except IntegrityError:
         await db.rollback()
         logger.info("[REGISTER] Duplicate username/email")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Username or email already exists.",
-        )
+        raise ConflictError("Username or email already exists.")
 
 
 @router.post("/resend-verification")
 async def resend_verification(
-        email: str,
-        background_tasks: BackgroundTasks,
-        db: AsyncSession = Depends(get_db)
+    email: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
 ):
     query = select(User).where(func.lower(User.email) == email.lower())
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 
-    # Enum attack rokne ke liye generic response
     if not user:
-        return {"detail": "If email exists, verification link sent,"}
+        return {"detail": "If email exists, verification link sent."}
 
     if user.is_active:
         return {"detail": "Account already verified"}
 
-    # Rate limit check
     cooldown_key = f"email_cooldown:{email.lower()}"
     try:
         if await redis_client.get(cooldown_key):
-            raise HTTPException(status_code=429, detail="Please wait 2 minutes before requesting another email.")
+            raise RateLimitError("Please wait 2 minutes before requesting another email.")
         await redis_client.setex(cooldown_key, 120, "locked")
     except RedisError:
         pass
 
     token = create_verification_token(user.email)
     background_tasks.add_task(send_verification_email, user.email, token)
-    return {"detail": "If email exists, verification link sent"}
+    return {"detail": "If email exists, verification link sent."}
 
 
 @router.post("/login")
 async def login(
-        request: Request,
-        db: AsyncSession = Depends(get_db),
-        form_data: OAuth2PasswordRequestForm = Depends(),
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    form_data: OAuth2PasswordRequestForm = Depends(),
 ):
     logger.info("[LOGIN] Attempt")
 
-    # Rate-limit by client IP
     client_ip = request.client.host if request.client else "unknown"
     ip_rate_key = f"rate_limit:login:ip:{client_ip}"
-
-    # === CHANGED/ADDED CODE START ===
-    # Username rate limiting to prevent distributed brute-force attacks via Proxies
     username_attempt = form_data.username.lower()
     user_rate_key = f"rate_limit:login:user:{username_attempt}"
 
     try:
         if await is_rate_limited(ip_rate_key, limit=5, window=60, redis_client=redis_client):
             logger.warning("[LOGIN] IP Rate limit exceeded")
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many login attempts from your IP. Please try again later.",
-                headers={"Retry-After": "60"}
-            )
+            raise RateLimitError("Too many login attempts from your IP. Please try again later.")
 
         if await is_rate_limited(user_rate_key, limit=5, window=60, redis_client=redis_client):
             logger.warning(f"[LOGIN] User account brute-force detected for {username_attempt}")
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Account temporarily locked due to too many failed attempts.",
-                headers={"Retry-After": "60"}
-            )
+            raise RateLimitError("Account temporarily locked due to too many failed attempts.")
     except RedisError:
         logger.warning("[LOGIN] Rate limiter unavailable (Redis error); continuing")
-    # === CHANGED/ADDED CODE END ===
 
     query = select(User).where(func.lower(User.email) == form_data.username.lower())
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise AuthenticationError("Incorrect email or password")
 
-    is_valid_password, new_hash = verify_and_update_password(form_data.password, user.hashed_password)
+    is_valid_password, new_hash = verify_and_update_password(
+        form_data.password, user.hashed_password
+    )
     if not is_valid_password:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise AuthenticationError("Incorrect email or password")
 
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email before logging in.",
-        )
+        raise AccountInactiveError()
 
     if new_hash:
         user.hashed_password = new_hash
         await db.commit()
 
-    # === CHANGED/ADDED CODE START ===
-    # Using user.id (UUID) instead of username for better performance & security
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
-    # === CHANGED/ADDED CODE END ===
 
     return {
         "access_token": access_token,
@@ -193,10 +171,9 @@ async def logout(token: str = Depends(oauth2_scheme)):
     try:
         ttl_seconds = get_token_ttl_seconds(token)
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise InvalidTokenError("Invalid or expired token")
 
     await blacklist_token(token, expiry=ttl_seconds)
-
     return {"detail": "Successfully logged out"}
 
 
@@ -206,23 +183,19 @@ async def refresh_token(refresh_token: str):
         payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         token_type = payload.get("type")
         if token_type != "refresh":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+            raise InvalidTokenError("Invalid refresh token")
 
         subject = payload.get("sub")
         if not subject:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+            raise InvalidTokenError("Invalid refresh token")
 
-        # === CHANGED/ADDED CODE START ===
-        # THEFT DETECTION
         if await is_token_blacklisted(refresh_token):
-            logger.critical(f"[TOKEN THEFT] Attempt to use blacklisted refresh token by {subject}")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail="Token compromised. Please login again.")
+            logger.critical(f"[TOKEN THEFT] Blacklisted refresh token used by {subject}")
+            raise TokenCompromisedError()
 
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired or invalid")
+        raise InvalidTokenError("Refresh token expired or invalid")
 
-    # REFRESH TOKEN ROTATION
     ttl = get_token_ttl_seconds(refresh_token)
     await blacklist_token(refresh_token, expiry=ttl)
 
@@ -234,26 +207,19 @@ async def refresh_token(refresh_token: str):
         "refresh_token": new_refresh_token,
         "token_type": "bearer"
     }
-    # === CHANGED/ADDED CODE END ===
-
-
-@router.post("/admin-only")
-async def admin_only_action(current_user: User = Depends(require_roles("admin"))):
-    return {"ok": True}
 
 
 @router.post("/forgot-password")
 async def forgot_password(
-        data: PasswordResetCheck,
-        background_tasks: BackgroundTasks,
-        db: AsyncSession = Depends(get_db)
+    data: PasswordResetCheck,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(User).where(func.lower(User.email) == data.email.lower()))
+    result = await db.execute(
+        select(User).where(func.lower(User.email) == data.email.lower())
+    )
     user = result.scalar_one_or_none()
 
-    # ✅ BUG FIX: Pehle token banake "_" (discard) mein daal dete the — email kabhi send nahi hoti thi.
-    # "simulated" likh ke chod diya tha. Ab actual email send ho rahi hai background task se.
-    # Enumeration attack se bachne ke liye response same rehta hai chahe user ho ya na ho.
     if user:
         token = create_password_reset_token(data.email)
         background_tasks.add_task(send_verification_email, user.email, token)
@@ -262,55 +228,44 @@ async def forgot_password(
 
 
 @router.post("/reset-password")
-async def reset_password(data: PasswordResetConfirm, db: AsyncSession = Depends(get_db)):
-    # === CHANGED/ADDED CODE START ===
-    # Single-use reset token check
+async def reset_password(
+    data: PasswordResetConfirm,
+    db: AsyncSession = Depends(get_db)
+):
     if await is_token_blacklisted(data.token):
-        raise HTTPException(status_code=400, detail="This reset link has already been used or expired.")
-    # === CHANGED/ADDED CODE END ===
+        raise InvalidTokenError("This reset link has already been used or expired.")
 
     try:
         payload = jwt.decode(data.token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         if payload.get("type") != "password_reset":
-            raise HTTPException(status_code=400, detail="Invalid token type")
+            raise InvalidTokenError("Invalid token type")
 
         token_email = payload.get("sub")
         if not isinstance(token_email, str) or not token_email:
-            raise HTTPException(status_code=400, detail="Invalid token payload")
+            raise InvalidTokenError("Invalid token payload")
     except JWTError:
-        raise HTTPException(status_code=400, detail="Token expired or invalid")
+        raise InvalidTokenError("Token expired or invalid")
 
     if token_email.lower() != data.email.lower():
-        raise HTTPException(status_code=400, detail="Email and token do not match")
+        raise InvalidTokenError("Email and token do not match")
 
-    result = await db.execute(select(User).where(func.lower(User.email) == data.email.lower()))
+    result = await db.execute(
+        select(User).where(func.lower(User.email) == data.email.lower())
+    )
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        raise NotFoundError("User not found")
 
     user.hashed_password = get_password_hash(data.new_password)
-
-    # === CHANGED/ADDED CODE START ===
-    # Update password_changed_at to invalidate all existing sessions
     user.password_changed_at = datetime.now(timezone.utc)
     await db.commit()
 
-    # Blacklist the token so it can't be reused
     ttl = get_token_ttl_seconds(data.token)
     await blacklist_token(data.token, expiry=ttl)
-    # === CHANGED/ADDED CODE END ===
 
-    return {"detail": "Password successfully reset! All other devices have been logged out."}
-
-
-@router.get("/admin-dashboard")
-async def admin_only(admin: User = Depends(require_roles("admin"))):
-    return {"msg": "Hello Admin!"}
-
-
-@router.get("/inventory")
-async def view_inventory(user: User = Depends(require_roles("admin", "manager"))):
-    return {"msg": "Access granted to admin or Manager"}
+    return {
+        "detail": "Password successfully reset! All other devices have been logged out."
+    }
 
 
 @router.get("/verify")
@@ -318,15 +273,15 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         if payload.get("type") != "email_verification":
-            raise HTTPException(status_code=400, detail="Invalid token type")
+            raise InvalidTokenError("Invalid token type")
         email = payload.get("sub")
     except JWTError:
-        raise HTTPException(status_code=400, detail="Link is expired or invalid")
+        raise InvalidTokenError("Link is expired or invalid")
 
     result = await db.execute(select(User).where(func.lower(User.email) == email.lower()))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise NotFoundError("User not found")
 
     if user.is_active:
         return {"detail": "Account already verified."}
@@ -337,4 +292,20 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     ttl = get_token_ttl_seconds(token)
     await blacklist_token(token, expiry=ttl)
 
-    return {"detail": "congratulation Your Account is verified"}
+    return {"detail": "Congratulations! Your account is verified."}
+
+
+# Admin endpoints
+@router.post("/admin-only")
+async def admin_only_action(current_user: User = Depends(require_roles("admin"))):
+    return {"ok": True}
+
+
+@router.get("/admin-dashboard")
+async def admin_only(admin: User = Depends(require_roles("admin"))):
+    return {"msg": "Hello Admin!"}
+
+
+@router.get("/inventory")
+async def view_inventory(user: User = Depends(require_roles("admin", "manager"))):
+    return {"msg": "Access granted to admin or Manager"}
