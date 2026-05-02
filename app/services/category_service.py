@@ -3,11 +3,12 @@ from sqlalchemy.future import select
 from typing import Dict, List
 from sqlalchemy.exc import SQLAlchemyError
 import logging
+import uuid
 
 from app.db.models.product import Category, Product
 from app.schemas.product import CategoryCreate, CategoryResponse, ProductCreate
 from app.services.utils import generate_unique_slug
-from app.core.exceptions import DatabaseError
+from app.core.exceptions import DatabaseError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -86,24 +87,40 @@ class CatalogService:
 
     @staticmethod
     async def get_active_products(db: AsyncSession, skip: int = 0, limit: int = 20):
-        query = (
-            select(Product)
-            .where(Product.is_deleted == False)
-            .offset(skip)
-            .limit(limit)
-        )
-        result = await db.execute(query)
-        return result.scalars().all()
+        try:
+            query = (
+                select(Product)
+                .where(Product.is_deleted == False)
+                .offset(skip)
+                .limit(limit)
+            )
+            result = await db.execute(query)
+            return result.scalars().all()
+        except SQLAlchemyError as exc:
+            logger.error(f"Database error fetching active products: {exc}", exc_info=True)
+            raise DatabaseError("Failed to fetch products")
 
     @staticmethod
     async def soft_delete_product(db: AsyncSession, product_id: str):
-        query = select(Product).where(Product.id == product_id)
-        result = await db.execute(query)
-        db_obj = result.scalar_one_or_none()
+        try:
+            try:
+                product_uuid = uuid.UUID(product_id)
+            except (ValueError, AttributeError):
+                raise NotFoundError("Invalid product ID.")
 
-        if not db_obj:
-            return False
+            query = select(Product).where(Product.id == product_uuid)
+            result = await db.execute(query)
+            db_obj = result.scalar_one_or_none()
 
-        db_obj.is_deleted = True
-        await db.commit()
-        return True
+            if not db_obj:
+                raise NotFoundError("Product not found.")
+
+            db_obj.is_deleted = True
+            await db.commit()
+            return True
+        except NotFoundError:
+            raise
+        except SQLAlchemyError as exc:
+            await db.rollback()
+            logger.error(f"Database error soft-deleting product {product_id}: {exc}", exc_info=True)
+            raise DatabaseError("Failed to delete product")
