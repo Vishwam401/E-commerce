@@ -100,26 +100,33 @@ class AddressService:
         address_id: uuid.UUID,
         address_in: AddressUpdate
     ) -> Address:
-        stmt = select(Address).where(
-            and_(
-                Address.id == address_id,
-                Address.user_id == user_id,
-                Address.is_deleted == False
+        try:
+            stmt = select(Address).where(
+                and_(
+                    Address.id == address_id,
+                    Address.user_id == user_id,
+                    Address.is_deleted == False
+                )
             )
-        )
-        result = await db.execute(stmt)
-        db_address = result.scalar_one_or_none()
+            result = await db.execute(stmt)
+            db_address = result.scalar_one_or_none()
 
-        if not db_address:
-            raise NotFoundError("Address not found.")
+            if not db_address:
+                raise NotFoundError("Address not found.")
 
-        update_data = address_in.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(db_address, field, value)
+            update_data = address_in.model_dump(exclude_unset=True)
+            for field, value in update_data.items():
+                setattr(db_address, field, value)
 
-        await db.commit()
-        await db.refresh(db_address)
-        return db_address
+            await db.commit()
+            await db.refresh(db_address)
+            return db_address
+        except NotFoundError:
+            raise
+        except SQLAlchemyError as exc:
+            await db.rollback()
+            logger.error(f"Database error updating address {address_id}: {exc}", exc_info=True)
+            raise DatabaseError("Failed to update address")
 
     @staticmethod
     async def delete_address(
@@ -127,18 +134,25 @@ class AddressService:
         user_id: uuid.UUID,
         address_id: uuid.UUID
     ):
-        stmt = select(Address).where(
-            and_(Address.id == address_id, Address.user_id == user_id)
-        )
-        result = await db.execute(stmt)
-        address = result.scalar_one_or_none()
+        try:
+            stmt = select(Address).where(
+                and_(Address.id == address_id, Address.user_id == user_id)
+            )
+            result = await db.execute(stmt)
+            address = result.scalar_one_or_none()
 
-        if not address:
-            raise NotFoundError("Address not found.")
+            if not address:
+                raise NotFoundError("Address not found.")
 
-        address.is_deleted = True
-        if address.is_default:
-            address.is_default = False
+            address.is_deleted = True
+            if address.is_default:
+                address.is_default = False
 
-        await db.commit()
-        return {"detail": "Address deleted successfully"}
+            await db.commit()
+            return {"detail": "Address deleted successfully"}
+        except NotFoundError:
+            raise
+        except SQLAlchemyError as exc:
+            await db.rollback()
+            logger.error(f"Database error deleting address {address_id}: {exc}", exc_info=True)
+            raise DatabaseError("Failed to delete address")

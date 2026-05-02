@@ -15,37 +15,50 @@ logger = logging.getLogger(__name__)
 class ProductService:
     @staticmethod
     async def create(db: AsyncSession, obj_in: ProductCreate):
-        slug = await generate_unique_slug(db, Product, obj_in.name)
-        product_data = obj_in.model_dump()
-        product_data["slug"] = slug
+        try:
+            slug = await generate_unique_slug(db, Product, obj_in.name)
+            product_data = obj_in.model_dump()
+            product_data["slug"] = slug
 
-        db_obj = Product(**product_data)
-        db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
-        return db_obj
+            db_obj = Product(**product_data)
+            db.add(db_obj)
+            await db.commit()
+            await db.refresh(db_obj)
+            return db_obj
+        except SQLAlchemyError as exc:
+            await db.rollback()
+            logger.error(f"Database error creating product: {exc}", exc_info=True)
+            raise DatabaseError("Failed to create product")
 
     @staticmethod
     async def get_active_products(db: AsyncSession, skip: int = 0, limit: int = 20):
-        query = (
-            select(Product)
-            .where(Product.is_deleted == False)
-            .offset(skip)
-            .limit(limit)
-        )
-        result = await db.execute(query)
-        return result.scalars().all()
+        try:
+            query = (
+                select(Product)
+                .where(Product.is_deleted == False)
+                .offset(skip)
+                .limit(limit)
+            )
+            result = await db.execute(query)
+            return result.scalars().all()
+        except SQLAlchemyError as exc:
+            logger.error(f"Database error fetching active products: {exc}", exc_info=True)
+            raise DatabaseError("Failed to fetch products")
 
     @staticmethod
     async def get_all_admin(db: AsyncSession, skip: int = 0, limit: int = 20):
-        query = (
-            select(Product)
-            .order_by(Product.is_deleted.asc(), Product.name.asc())
-            .offset(skip)
-            .limit(limit)
-        )
-        result = await db.execute(query)
-        return result.scalars().all()
+        try:
+            query = (
+                select(Product)
+                .order_by(Product.is_deleted.asc(), Product.name.asc())
+                .offset(skip)
+                .limit(limit)
+            )
+            result = await db.execute(query)
+            return result.scalars().all()
+        except SQLAlchemyError as exc:
+            logger.error(f"Database error fetching all products (admin): {exc}", exc_info=True)
+            raise DatabaseError("Failed to fetch products")
 
     @staticmethod
     async def soft_delete(db: AsyncSession, product_id: str):
@@ -81,17 +94,24 @@ class ProductService:
         product_id: uuid.UUID,
         update_data: ProductUpdate
     ):
-        query = select(Product).where(Product.id == product_id)
-        result = await db.execute(query)
-        db_obj = result.scalar_one_or_none()
+        try:
+            query = select(Product).where(Product.id == product_id)
+            result = await db.execute(query)
+            db_obj = result.scalar_one_or_none()
 
-        if not db_obj:
-            raise NotFoundError("Product not found.")
+            if not db_obj:
+                raise NotFoundError("Product not found.")
 
-        patch = update_data.model_dump(exclude_unset=True)
-        for field, value in patch.items():
-            setattr(db_obj, field, value)
+            patch = update_data.model_dump(exclude_unset=True)
+            for field, value in patch.items():
+                setattr(db_obj, field, value)
 
-        await db.commit()
-        await db.refresh(db_obj)
-        return db_obj
+            await db.commit()
+            await db.refresh(db_obj)
+            return db_obj
+        except NotFoundError:
+            raise
+        except SQLAlchemyError as exc:
+            await db.rollback()
+            logger.error(f"Database error updating product {product_id}: {exc}", exc_info=True)
+            raise DatabaseError("Failed to update product")

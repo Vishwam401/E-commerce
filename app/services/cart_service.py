@@ -1,4 +1,5 @@
 import uuid
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -12,6 +13,8 @@ from app.core.exceptions import (
     ProductUnavailableError,
     DatabaseError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CartService:
