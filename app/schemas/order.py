@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field, UUID4, field_validator
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
@@ -8,7 +8,6 @@ import uuid
 
 
 class OrderItemOut(BaseModel):
-
     product_id: UUID4
     product_name: str
     quantity: int
@@ -24,6 +23,8 @@ class OrderOut(BaseModel):
     total_price: Decimal
     status: OrderStatus
     shipping_address_snapshot: Optional[str] = None
+    coupon_code_snapshot: Optional[str]  = None
+    discount_amount: Decimal = Decimal('0.00')
     created_at: datetime
     items: List[OrderItemOut] = Field(default_factory=list)
 
@@ -40,7 +41,18 @@ class OrderCreate(BaseModel):
 
 class CheckoutRequest(BaseModel):
     address_id: uuid.UUID
+    #--Optional coupon override
+    coupon_code: Optional[str] = Field(default=None, min_length=1, max_length=50)
 
+
+    @field_validator('coupon_code')
+    @classmethod
+    def normalize_coupon_code(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            return v.strip().upper()
+        return v
+
+    
 class PaymentVerifyRequest(BaseModel):
     razorpay_order_id: str = Field(..., min_length=1)
     razorpay_payment_id: str = Field(..., min_length=1)

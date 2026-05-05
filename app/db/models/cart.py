@@ -1,16 +1,20 @@
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import ForeignKey, DateTime, Integer, CheckConstraint, UniqueConstraint
+from decimal import Decimal
+
+from sqlalchemy import (
+    ForeignKey, DateTime, Integer, CheckConstraint,
+    UniqueConstraint, Numeric, String
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
-
 from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.db.models.product import Product
+
 
 class Cart(Base):
     __tablename__ = 'carts'
@@ -32,11 +36,26 @@ class Cart(Base):
         cascade="all, delete-orphan"
     )
 
-    # Cart Total at ORM level So that we don't have to repeat calculations again and again
+    # -- Coupon Fields ---
+    coupon_code: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, default=None
+    )
+    discount_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2),nullable=False, default=Decimal('0.00')
+    )
+
     @property
-    def total_price(self) -> float:
-        # Ye property apne aap saare items ki quantity aur price multiply karke total de degi
-        return sum(item.quantity * item.product.price for item in self.items if item.product)
+    def subtotal_price(self) -> Decimal:
+        return sum(
+            item.quantity * item.product.price
+            for item in self.items
+            if item.product
+        )
+
+    @property
+    def total_price(self) -> Decimal:
+        raw_total = self.subtotal_price - self.discount_amount
+        return max(raw_total, Decimal('0.00'))
 
 
 class CartItem(Base):
@@ -47,7 +66,7 @@ class CartItem(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True,default=uuid.uuid4)
-
+    
     cart_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey('carts.id', ondelete="CASCADE"),

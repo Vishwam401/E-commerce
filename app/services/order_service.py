@@ -31,6 +31,7 @@ from app.core.exceptions import (
     DatabaseError,
     ServiceUnavailableError,
 )
+from app.services.coupon_service import use_coupon_in_checkout
 
 client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_SECRET_KEY))
 logger = logging.getLogger(__name__)
@@ -86,7 +87,10 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
     subtotal = sum(item.quantity * item.product.price for item in cart.items)
     tax_amount = round_money(subtotal * TAX_RATE)
     shipping_amount = Decimal('0.00') if subtotal >= SHIPPING_THRESHOLD else FLAT_SHIPPING_FEE
-    grand_total = subtotal + tax_amount + shipping_amount
+
+    discount_amount = cart.discount_amount or Decimal('0.00')
+
+    grand_total = max(subtotal + tax_amount + shipping_amount - discount_amount, Decimal('0.00'))
 
     amount_in_paise = int(grand_total * 100)
     if amount_in_paise < 100:
@@ -122,7 +126,9 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
             shipping_price=shipping_amount,
             total_price=grand_total,
             status=OrderStatus.PENDING,
-            shipping_address_snapshot=address_snapshot
+            shipping_address_snapshot=address_snapshot,
+            coupon_code_snapshot=None,
+            discount_amount=Decimal('0.00')
         )
         db.add(new_order)
         await db.flush()
@@ -157,6 +163,10 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
 
         # Clear cart
         await db.execute(delete(CartItem).where(CartItem.cart_id == cart.id))
+
+        #COUPON USAGE
+        if cart.coupon_code:
+            await use_coupon_in_checkout(db, cart, new_order, user_id)
 
         # Transaction record
         new_transaction = Transaction(

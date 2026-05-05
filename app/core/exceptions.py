@@ -2,21 +2,20 @@
 Custom Exception Hierarchy for Alpha-Commerce
 
 Architecture:
-    Exception (Python built-in)
-    └── AppException (Base for our app)
-        ├── BadRequestError (400)
-        ├── UnauthorizedError (401)
-        ├── ForbiddenError (403)
-        ├── NotFoundError (404)
-        ├── ConflictError (409)
-        ├── RateLimitError (429)
-        └── ServiceUnavailableError (503)
-            └── PaymentGatewayError (502/503)
+ Exception (Python built-in)
+ └── AppException (Base for our app)
+ ├── BadRequestError (400)
+ ├── UnauthorizedError (401)
+ ├── ForbiddenError (403)
+ ├── NotFoundError (404)
+ ├── ConflictError (409)
+ ├── RateLimitError (429)
+ └── ServiceUnavailableError (503)
+ └── PaymentGatewayError (502/503)
 """
 
 import uuid
 from typing import List, Optional
-
 
 class AppException(Exception):
     """
@@ -25,9 +24,9 @@ class AppException(Exception):
 
     super().__init__(self.message) calls Python's built-in Exception.__init__().
     This ensures:
-      1. str(exception) returns the message
-      2. traceback is properly captured
-      3. exception can be caught as 'except Exception'
+    1. str(exception) returns the message
+    2. traceback is properly captured
+    3. exception can be caught as 'except Exception'
     """
 
     def __init__(self, message: str, status_code: int = 500, error_code: str = None):
@@ -159,7 +158,7 @@ class UsernameAlreadyExistsError(ConflictError):
 
 
 class DataIntegrityError(ServiceUnavailableError):
-    """DB mein kuch toot-phoot ho gayi"""
+    """DB mein kuchh toot-phoot ho gayi"""
 
     def __init__(self, message: str = "Data integrity error"):
         super().__init__(message)
@@ -208,3 +207,60 @@ class SessionInvalidatedError(UnauthorizedError):
 
     def __init__(self):
         super().__init__("Invalidated session. Please login again.")
+
+
+# ═══════════════════════════════════════════════════════════════
+# COUPON EXCEPTIONS (NEW)
+# ═══════════════════════════════════════════════════════════════
+# BadRequestError se inherit → auto 400 status code
+# Har exception ka specific message → frontend ko exact reason pata chale
+
+class CouponNotFoundError(NotFoundError):
+    """404 - Coupon code DB mein nahi mila"""
+
+    def __init__(self, code: str = ""):
+        super().__init__(f"Coupon '{code}' not found.")
+
+
+class CouponInactiveError(BadRequestError):
+    """400 - Coupon exist karta hai lekin disable kar diya gaya"""
+
+    def __init__(self, code: str = ""):
+        super().__init__(f"Coupon '{code}' is currently inactive.")
+
+
+class CouponExpiredError(BadRequestError):
+    """400 - Coupon ka time window khatam ho gaya"""
+
+    def __init__(self, code: str = ""):
+        super().__init__(f"Coupon '{code}' has expired.")
+
+
+class CouponLimitReachedError(BadRequestError):
+    """400 - Total usage limit cross ho gayi (e.g., 100/100 uses)"""
+
+    def __init__(self, code: str = ""):
+        super().__init__(f"Coupon '{code}' usage limit has been reached.")
+
+
+class CouponUserLimitReachedError(BadRequestError):
+    """400 - Is user ne apna personal limit use kar liya"""
+
+    def __init__(self, code: str = ""):
+        super().__init__(f"You have already used coupon '{code}' maximum times.")
+
+
+class MinimumOrderNotMetError(BadRequestError):
+    """400 - Cart total coupon ke minimum se kam hai"""
+
+    def __init__(self, required: str = "", current: str = ""):
+        super().__init__(
+            f"Minimum order of ₹{required} required. Your cart: ₹{current}"
+        )
+
+
+class CouponAlreadyAppliedError(BadRequestError):
+    """400 - Same coupon cart pe already laga hua hai"""
+
+    def __init__(self, code: str = ""):
+        super().__init__(f"Coupon '{code}' is already applied to your cart.")

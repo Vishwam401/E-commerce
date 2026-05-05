@@ -1,5 +1,6 @@
 import uuid
-from pydantic import BaseModel, ConfigDict, Field
+from decimal import Decimal
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import List, Optional
 from datetime import datetime
 
@@ -53,4 +54,19 @@ class CartResponse(BaseModel):
     # Ek extra field jo hum backend se calculate karke bhejenge
     total_price: float = 0.0
 
+    # --COUPON FIELDS---
+    coupon_code: Optional[str] = None
+
+    discount_amount: float = 0.0
+
+    total_after_discount: float =  0.0
+
     model_config = ConfigDict(from_attributes=True)
+
+    # ── Sync Validator ──
+    # total_after_discount hamesha total_price ke barabar hona chahiye
+    # Kyunki model mein total_price ab final discounted amount return karta hai
+    @model_validator(mode='after')
+    def sync_totals(self):
+        self.total_after_discount = self.total_price
+        return self
