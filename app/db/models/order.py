@@ -5,7 +5,6 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional, TYPE_CHECKING
 
-from psycopg2._psycopg import Column
 from sqlalchemy import String, ForeignKey, DateTime, Integer, Numeric, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -31,17 +30,42 @@ class OrderStatus(str, enum.Enum):
 class Order(Base):
     __tablename__ = "orders"
 
-    # 1. PRIMARY & FOREIGN KEYS
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    address_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("addresses.id", ondelete="SET NULL"), nullable=True)
+    # ── PRIMARY & FOREIGN KEYS ──
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    address_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("addresses.id", ondelete="SET NULL"),
+        nullable=True
+    )
 
-    # 2. BUSINESS PRICING DATA
-    # Sabhi prices ek saath rakho taaki calculation logic samajhne mein aasani ho
-    subtotal_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal('0.00')) # Raw Product Total
-    tax_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal('0.00'))
-    shipping_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal('0.00'))
-    total_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal('0.00')) # Grand Total
+    # ── BUSINESS PRICING DATA ──
+    subtotal_price: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal('0.00')
+    )
+    tax_price: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal('0.00')
+    )
+    shipping_price: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal('0.00')
+    )
+    total_price: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal('0.00')
+    )
+
+    # --COUPON SNAPSHOT FIELDS
+    coupon_code_snapshot: Mapped[Optional[uuid.UUID]] = mapped_column(
+        String(50), nullable=True, default=None
+    )
+    discount_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal('0.00')
+    )
 
     # 3. ORDER STATUS
     status: Mapped[OrderStatus] = mapped_column(SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
