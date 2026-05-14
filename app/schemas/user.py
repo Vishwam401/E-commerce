@@ -1,43 +1,60 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from datetime import datetime
 from uuid import UUID
-import re
 from typing import Optional
 
-
-def _validate_password_strength(value: str) -> str:
-    if not re.search(r"[A-Z]", value):
-        raise ValueError("Password must contain at least one uppercase letter.")
-    if not re.search(r"[a-z]", value):
-        raise ValueError("Password must contain at least one lowercase letter.")
-    if not re.search(r"\d", value):
-        raise ValueError("Password must contain at least one digit.")
-    if not re.search(r"[@$!%*?&]", value):
-        raise ValueError("Password must contain at least one special character (@$!%*?&).")
-    return value
+# Import validators from separate module
+from app.validators import (
+    validate_password_strength,
+    validate_full_name,
+    validate_indian_phone,
+    normalize_email,
+    normalize_username,
+)
 
 
 class UserBase(BaseModel):
+    """Base user schema with email and username normalization"""
     email: EmailStr
     username: str = Field(
-        ...,  # Required field
+        ...,
         min_length=3,
         max_length=50,
-        pattern=r'^[a-zA-Z0-9_]+$'  # Alphanumeric with underscores
+        pattern=r'^[a-zA-Z0-9_]+$'
     )
+
+    @field_validator("email", mode="after")
+    @classmethod
+    def normalize_email_field(cls, v: str) -> str:
+        return normalize_email(v)
+
+    @field_validator("username", mode="after")
+    @classmethod
+    def normalize_username_field(cls, v: str) -> str:
+        return normalize_username(v)
 
 
 class UserCreate(UserBase):
-    password: str = Field(
-        ...,  # Required field
-        min_length=8,
-        max_length=50
-    )
+    """User registration schema"""
+    password: str = Field(..., min_length=8, max_length=50)
+    full_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    phone_number: Optional[str] = Field(None, min_length=10, max_length=15)
 
-    @field_validator("password")
+    @field_validator("password", mode="after")
     @classmethod
-    def validate_password_strength(cls, value: str) -> str:
-        return _validate_password_strength(value)
+    def validate_password(cls, v: str) -> str:
+        return validate_password_strength(v)
+
+    @field_validator("full_name", mode="after")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        return validate_full_name(v)
+
+    @field_validator("phone_number", mode="after")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        return validate_indian_phone(v)
+
 
 
 class UserOut(UserBase):
@@ -51,42 +68,55 @@ class UserOut(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class PasswordResetCheck(BaseModel):
+    """Initiate password reset"""
     email: EmailStr
 
+    @field_validator("email", mode="after")
+    @classmethod
+    def normalize_email_field(cls, v: str) -> str:
+        return normalize_email(v)
+
+
 class PasswordResetConfirm(BaseModel):
+    """Confirm password reset with token"""
     email: EmailStr
     token: str = Field(..., min_length=10, max_length=2048)
     new_password: str = Field(..., min_length=8, max_length=50)
 
-    @field_validator("new_password")
+    @field_validator("email", mode="after")
     @classmethod
-    def validate_new_password_strength(cls, value: str) -> str:
-        return _validate_password_strength(value)
+    def normalize_email_field(cls, v: str) -> str:
+        return normalize_email(v)
+
+    @field_validator("new_password", mode="after")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class UserUpdate(BaseModel):
+    """Update user profile - all fields optional"""
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    full_name: Optional[str] = Field(None, min_length=3, max_length=50)
+    full_name: Optional[str] = Field(None, min_length=1, max_length=100)
     email: Optional[EmailStr] = None
-    phone_number: Optional[str] = None
+    phone_number: Optional[str] = Field(None, min_length=10, max_length=15)
 
-    @field_validator("phone_number")
+    @field_validator("email", mode="after")
     @classmethod
-    def validate_indian_phone(cls, v: str):
-        if v is None: return v
+    def normalize_email_field(cls, v: Optional[str]) -> Optional[str]:
+        return normalize_email(v) if v else v
 
-        pattern = r"^(?:\+91|0)?[6-9]\d{9}$"
-        if not re.match(pattern, v):
-            raise ValueError("Invalid Indian Phone Number. Must be 10 digits.")
+    @field_validator("full_name", mode="after")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        return validate_full_name(v)
 
-        # Standardize: Always store as +91XXXXXXXXXX
-        clean_v = "".join(filter(str.isdigit, v))
-        if len(clean_v) == 10:
-            return f"+91{clean_v}"
-        elif len(clean_v) == 12 and clean_v.startswith("91"):
-            return f"+{clean_v}"
-        return v
+    @field_validator("phone_number", mode="after")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        return validate_indian_phone(v)
 
 

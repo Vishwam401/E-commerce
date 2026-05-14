@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 from app.db.models.order import OrderStatus
+from app.validators import normalize_coupon_code
 
 import uuid
 
@@ -41,16 +42,12 @@ class OrderCreate(BaseModel):
 
 class CheckoutRequest(BaseModel):
     address_id: uuid.UUID
-    #--Optional coupon override
     coupon_code: Optional[str] = Field(default=None, min_length=1, max_length=50)
 
-
-    @field_validator('coupon_code')
+    @field_validator('coupon_code', mode="after")
     @classmethod
-    def normalize_coupon_code(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None:
-            return v.strip().upper()
-        return v
+    def validate_coupon_code(cls, v: Optional[str]) -> Optional[str]:
+        return normalize_coupon_code(v)
 
     
 class PaymentVerifyRequest(BaseModel):
