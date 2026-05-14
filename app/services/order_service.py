@@ -31,6 +31,8 @@ from app.core.exceptions import (
     DatabaseError,
     ServiceUnavailableError,
 )
+from app.services.inventory_service import record_stock_movement
+from app.db.models.inventory import StockMovementType
 from app.services.coupon_service import use_coupon_in_checkout
 
 client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_SECRET_KEY))
@@ -51,11 +53,6 @@ def round_money(amount: Decimal):
 
 
 async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: uuid.UUID):
-    """
-    Cart → Order conversion with Razorpay-first flow.
-    Razorpay order ID pehle lo, phir DB mein write karo.
-    """
-    # Fetch cart with products
     stmt = select(Cart).where(Cart.user_id == user_id).options(
         selectinload(Cart.items).selectinload(CartItem.product)
     )
@@ -65,7 +62,6 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
     if not cart or not cart.items:
         raise CartEmptyError()
 
-    # Address verification
     address_stmt = select(Address).where(Address.id == address_id, Address.user_id == user_id)
     address_result = await db.execute(address_stmt)
     address_obj = address_result.scalar_one_or_none()
@@ -79,7 +75,6 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
         f"Phone: {address_obj.phone_number}"
     )
 
-    # Pricing calculation
     TAX_RATE = Decimal('0.18')
     SHIPPING_THRESHOLD = Decimal('500.00')
     FLAT_SHIPPING_FEE = Decimal('50.00')
@@ -87,16 +82,13 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
     subtotal = sum(item.quantity * item.product.price for item in cart.items)
     tax_amount = round_money(subtotal * TAX_RATE)
     shipping_amount = Decimal('0.00') if subtotal >= SHIPPING_THRESHOLD else FLAT_SHIPPING_FEE
-
     discount_amount = cart.discount_amount or Decimal('0.00')
-
     grand_total = max(subtotal + tax_amount + shipping_amount - discount_amount, Decimal('0.00'))
 
     amount_in_paise = int(grand_total * 100)
     if amount_in_paise < 100:
         raise MinimumOrderError()
 
-    # Razorpay call FIRST (before any DB write)
     order_data = {
         "amount": amount_in_paise,
         "currency": "INR",
@@ -116,7 +108,6 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
     if "id" not in rzp_order:
         raise PaymentGatewayError("Razorpay order ID generation failed")
 
-    # DB writes start here - wrapped in try for DB errors only
     try:
         new_order = Order(
             user_id=user_id,
@@ -134,7 +125,6 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
         await db.flush()
         order_id = new_order.id
 
-        # Stock update & OrderItems
         for c_item in cart.items:
             if not c_item.product or c_item.product.is_deleted:
                 raise ProductUnavailableError(str(c_item.product_id))
@@ -142,7 +132,6 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
             if c_item.product.stock_quantity < c_item.quantity:
                 raise InsufficientStockError(c_item.product.name)
 
-            # Atomic decrement
             stock_update_stmt = (
                 update(Product)
                 .where(Product.id == c_item.product_id, Product.stock_quantity >= c_item.quantity)
@@ -153,6 +142,16 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
             if upd_result.rowcount == 0:
                 raise InsufficientStockError(c_item.product.name)
 
+            c_item.product.stock_quantity -= c_item.quantity
+
+            await record_stock_movement(
+                db=db,
+                product=c_item.product,
+                movement_type=StockMovementType.SALE,
+                quantity_changed=-c_item.quantity,
+                reference_id=order_id,
+            )
+
             db.add(OrderItem(
                 order_id=order_id,
                 product_id=c_item.product_id,
@@ -161,14 +160,13 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
                 price_at_purchase=c_item.product.price
             ))
 
-        # Clear cart
-        await db.execute(delete(CartItem).where(CartItem.cart_id == cart.id))
-
-        #COUPON USAGE
         if cart.coupon_code:
             await use_coupon_in_checkout(db, cart, new_order, user_id)
 
-        # Transaction record
+        await db.execute(delete(CartItem).where(CartItem.cart_id == cart.id))
+        cart.coupon_code = None
+        cart.discount_amount = Decimal('0.00')
+
         new_transaction = Transaction(
             order_id=order_id,
             razorpay_order_id=rzp_order["id"],
@@ -179,7 +177,6 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
 
         await db.commit()
 
-        # Fetch final order for response
         final_stmt = (
             select(Order)
             .where(Order.id == order_id)
@@ -219,9 +216,7 @@ async def get_user_orders(
     stmt = (
         select(Order)
         .where(Order.user_id == user_id)
-        .options(
-            selectinload(Order.items).selectinload(OrderItem.product)
-        )
+        .options(selectinload(Order.items).selectinload(OrderItem.product))
         .order_by(Order.created_at.desc())
         .limit(limit)
         .offset(offset)
@@ -258,7 +253,6 @@ async def verify_razorpay_payment(
     if not transaction:
         raise NotFoundError("Transaction record not found.")
 
-    # Authorization check
     order_stmt = select(Order).where(Order.id == transaction.order_id)
     order_result = await db.execute(order_stmt)
     order = order_result.scalar_one_or_none()
@@ -270,7 +264,6 @@ async def verify_razorpay_payment(
         )
         raise ForbiddenError("You are not authorized to verify this payment.")
 
-    # Idempotency check
     if transaction.status == "SUCCESS":
         return {"status": "success", "message": "Payment already verified."}
 
@@ -328,9 +321,7 @@ async def process_order_cancellation(
     stmt = (
         select(Order)
         .where(Order.id == order_id, Order.user_id == user_id)
-        .options(
-            selectinload(Order.items).selectinload(OrderItem.product)
-        )
+        .options(selectinload(Order.items).selectinload(OrderItem.product))
         .with_for_update()
     )
 
@@ -347,7 +338,6 @@ async def process_order_cancellation(
         if order.status in [OrderStatus.SHIPPED, OrderStatus.DELIVERED]:
             raise OrderCancellationError(order.status.value)
 
-        # Atomic stock rollback
         for item in order.items:
             if not item.product:
                 logger.error(f"INTEGRITY ERROR: Product missing for OrderItem {item.id}")
@@ -358,6 +348,20 @@ async def process_order_cancellation(
                 .where(Product.id == item.product_id)
                 .values(stock_quantity=Product.stock_quantity + item.quantity)
             )
+
+            prod_result = await db.execute(
+                select(Product).where(Product.id == item.product_id)
+            )
+            product = prod_result.scalar_one_or_none()
+
+            if product:
+                await record_stock_movement(
+                    db=db,
+                    product=product,
+                    movement_type=StockMovementType.RETURN,
+                    quantity_changed=+item.quantity,
+                    reference_id=order_id,
+                )
 
         order.status = OrderStatus.CANCELLED
         await db.commit()
@@ -374,10 +378,6 @@ async def process_order_cancellation(
         await db.rollback()
         raise
 
-
-# ===========================================================================
-# ADMIN SERVICE FUNCTIONS
-# ===========================================================================
 
 async def get_all_orders_admin(
     db: AsyncSession,
