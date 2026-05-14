@@ -1,8 +1,8 @@
-import re
 import uuid
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 from app.db.models.address import AddressType
+from app.validators import validate_phone_number, validate_pincode
 
 
 
@@ -16,22 +16,15 @@ class AddressBase(BaseModel):
     area: str = Field(..., min_length=2, max_length=255)
     address_type: AddressType = AddressType.HOME
 
-    # === SECURITY & INTEGRITY CHECK: Phone Number ===
-    @field_validator("phone_number")
+    @field_validator("phone_number", mode="after")
     @classmethod
     def validate_phone(cls, v):
-        pattern = r"^(?:\+91|0)?[6-9]\d{9}$"
-        if not re.match(pattern, v):
-            raise ValueError("Invalid Indian Phone Number")
-        return v
+        return validate_phone_number(v)
 
-    # === SECURITY & INTEGRITY CHECK: Pincode ===
-    @field_validator("pincode")
+    @field_validator("pincode", mode="after")
     @classmethod
-    def validate_pincode(cls, v):
-        if not v.isdigit():
-            raise ValueError("Pincode must contain only digits")
-        return v
+    def validate_pincode_field(cls, v):
+        return validate_pincode(v)
 
 
 # Create Schema: Address banane ke waqt
