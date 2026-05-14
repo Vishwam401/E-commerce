@@ -2,34 +2,31 @@ from __future__ import annotations
 import uuid
 import re
 from typing import List, TYPE_CHECKING, Optional
-from sqlalchemy import Column, String, Boolean, DateTime
+from datetime import datetime
+from sqlalchemy import String, Boolean, DateTime, text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import validates, relationship, Mapped
+from sqlalchemy.orm import validates, relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
-from sqlalchemy.testing.schema import mapped_column
 
 from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.db.models.order import Order
+    from app.db.models.address import Address
 
 class User(Base):
     __tablename__ = "users"
 
     # DB schema is migrated to native UUID
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = Column(String(50), unique=True, index=True, nullable=False)
-    email = Column(String(100), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(100), nullable=False)
-    password_changed_at = Column(DateTime(timezone=True), nullable=True)
-    is_active = Column(Boolean, default=False)
-    is_admin = Column(Boolean, default=False)
-    is_deleted = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-
-    # Perfect relationship mapping
-    orders: Mapped[List["Order"]] = relationship("Order", back_populates="user")
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    username: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(100), nullable=False)
+    password_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # For Razorpay
     phone_number: Mapped[Optional[str]] = mapped_column(
@@ -40,7 +37,10 @@ class User(Base):
     )
 
     full_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    addresses = relationship("Address", back_populates="user", cascade="all, delete-orphan")
+
+    # Relationships
+    orders: Mapped[List["Order"]] = relationship("Order", back_populates="user")
+    addresses: Mapped[List["Address"]] = relationship("Address", back_populates="user", cascade="all, delete-orphan")
 
     @validates('email')
     def validate_email(self, key, address):

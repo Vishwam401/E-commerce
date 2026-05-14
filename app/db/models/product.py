@@ -1,16 +1,15 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional, Dict, Any
 
 if TYPE_CHECKING:
     from app.db.models.cart import CartItem
+    from app.db.models.inventory import StockMovement
 
 import uuid
-from typing import Optional, Dict, Any
 from decimal import Decimal
 from sqlalchemy import String, Text, Integer, ForeignKey, Boolean, Numeric, text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from app.db.base_class import Base
-from app.db.models.cart import CartItem
 
 
 
@@ -63,7 +62,26 @@ class Product(Base):
     )
     category: Mapped[Optional[Category]] = relationship("Category", back_populates="products")
 
-    cart_items: Mapped[list["CartItem"]] = relationship("CartItem", back_populates="product")
+    cart_items: Mapped[List["CartItem"]] = relationship("CartItem", back_populates="product")
+
+    low_stock_threshold: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=10,
+    )
+
+    reorder_point: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=5,
+    )
+
+    stock_movements: Mapped[List["StockMovement"]] = relationship(
+        "StockMovement",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     def __repr__(self):
         return f"<Product(name='{self.name}', price={self.price})>"
