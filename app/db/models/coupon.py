@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 
 class DiscountType(str, enum.Enum):
-    FLAT = "flat"
-    PERCENTAGE = "percentage"
+    FLAT = "FLAT"
+    PERCENTAGE = "PERCENTAGE"
 
 
 class Coupon(Base):

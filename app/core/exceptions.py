@@ -264,3 +264,18 @@ class CouponAlreadyAppliedError(BadRequestError):
 
     def __init__(self, code: str = ""):
         super().__init__(f"Coupon '{code}' is already applied to your cart.")
+
+
+class NegativeStockError(BadRequestError):
+    def __init__(self, message: str = "Stock cannot be reduced below zero."):
+        super().__init__(message)
+
+
+class StockAdjustmentReasonRequired(BadRequestError):
+    def __init__(self, message: str = "Reason is required for stock adjustments."):
+        super().__init__(message)
+
+
+class InvalidStockQuantityError(BadRequestError):
+    def __init__(self, message: str = "Invalid stock quantity provided."):
+        super().__init__(message)
