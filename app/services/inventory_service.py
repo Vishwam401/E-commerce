@@ -101,6 +101,15 @@ async def admin_adjust_stock(
     product.stock_quantity += quantity_delta
     await db.commit()
 
+    # FIX: Re-fetch movement with product eagerly loaded after commit
+    # (After commit, lazy loading fails on async sessions)
+    result = await db.execute(
+        select(StockMovement)
+        .where(StockMovement.id == movement.id)
+        .options(joinedload(StockMovement.product))
+    )
+    movement = result.scalar_one()
+
     logger.info(
         f"[INVENTORY] Admin adjustment committed: product={product_id}, "
         f"delta={quantity_delta}, by={admin_id}, reason={reason[:50]}"
@@ -143,6 +152,15 @@ async def admin_restock(
 
     product.stock_quantity += quantity_to_add
     await db.commit()
+
+   # Re-fetch movement with product eagerly loaded after commit
+    # (After commit, lazy loading fails on async sessions)
+    result = await db.execute(
+        select(StockMovement)
+        .where(StockMovement.id == movement.id)
+        .options(joinedload(StockMovement.product))
+    )
+    movement = result.scalar_one()
 
     logger.info(
         f"[INVENTORY] Restock committed: product={product_id}, "

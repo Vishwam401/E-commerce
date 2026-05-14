@@ -37,9 +37,7 @@ class CartService:
                 cart = Cart(user_id=user_id)
                 db.add(cart)
                 await db.commit()
-                db.expire(cart)
-                await db.refresh(cart)
-                cart.items = []
+                await db.refresh(cart, attribute_names=["items"])
                 return cart
 
             # Ghost product cleanup
@@ -52,7 +50,7 @@ class CartService:
 
             if len(valid_items) != len(cart.items):
                 await db.commit()
-                cart.items = valid_items
+                await db.refresh(cart, attribute_names=["items"])
 
             return cart
         except SQLAlchemyError as exc:
