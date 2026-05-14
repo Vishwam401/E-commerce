@@ -7,6 +7,12 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.db.models.coupon import DiscountType
+from app.validators import (
+    normalize_coupon_code,
+    validate_discount_value,
+    validate_discount_cap,
+    validate_coupon_dates,
+)
 
 
 
@@ -24,32 +30,16 @@ class CouponBase(BaseModel):
     valid_until: datetime
     is_active: bool = True
 
-    # ── Code Normalization ──
-    @field_validator('code')
+    @field_validator('code', mode="after")
     @classmethod
     def normalize_code(cls, v: str) -> str:
-        return v.strip().upper()
+        return normalize_coupon_code(v)
 
-    # --DATE Validation--
     @model_validator(mode='after')
-    def check_valid_until(self):
-        if self.valid_until <= self.valid_from:
-            raise ValueError('valid_until must be strictly after valid_from')
-        return self
-
-    # --Percentage Sanity Check--
-    @model_validator(mode='after')
-    def check_percentage_value(self):
-        if self.discount_type == DiscountType.PERCENTAGE and self.discount_value > Decimal('100'):
-            raise ValueError('Percentage discount cannot exceed 100%')
-        return self
-
-    # --Percentage Cap Validation--
-    @model_validator(mode='after')
-    def check_cap_for_percentage(self):
-        if self.discount_type == DiscountType.PERCENTAGE and self.max_discount_cap is not None:
-            if self.max_discount_cap <= Decimal('0'):
-                raise ValueError('max_discount_cap must be positive for percentage discounts')
+    def validate_dates_and_discount(self):
+        validate_coupon_dates(self.valid_from, self.valid_until)
+        validate_discount_value(self.discount_value, self.discount_type)
+        validate_discount_cap(self.discount_type, self.max_discount_cap)
         return self
 
 
@@ -75,26 +65,23 @@ class CouponUpdate(BaseModel):
     valid_until: Optional[datetime] = None
     is_active: Optional[bool] = None
 
-    @field_validator('code')
+    @field_validator('code', mode="after")
     @classmethod
     def normalize_code(cls, v: Optional[str]) -> Optional[str]:
         if v is not None:
-            return v.strip().upper()
+            return normalize_coupon_code(v)
         return v
 
-    # Partial update mein sirf tab validate karo jab dono dates di gayi hain
     @model_validator(mode='after')
-    def check_valid_until(self):
+    def validate_partial_updates(self):
+        # Partial update: only validate dates if both provided
         if self.valid_from is not None and self.valid_until is not None:
-            if self.valid_until <= self.valid_from:
-                raise ValueError('valid_until must be strictly after valid_from')
-        return self
+            validate_coupon_dates(self.valid_from, self.valid_until)
 
-    @model_validator(mode='after')
-    def check_percentage_value(self):
-        if self.discount_type == DiscountType.PERCENTAGE and self.discount_value is not None:
-            if self.discount_value > Decimal('100'):
-                raise ValueError('Percentage discount cannot exceed 100%')
+        # Validate discount value if provided
+        if self.discount_type is not None and self.discount_value is not None:
+            validate_discount_value(self.discount_value, self.discount_type)
+
         return self
 
 
@@ -117,16 +104,16 @@ class CouponResponse(BaseModel):
         model_config = ConfigDict(from_attributes=True)
 
 
-# 5. APPLY COUPON REQUEST - User  checkout pe code bhejta hai
+# 5. APPLY COUPON REQUEST - User checkout pe code bhejta hai
 
 # Sirf code chahiye. User_id token se milega, cart_id user se pata chalta hai.
 class ApplyCouponRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=50)
 
-    @field_validator('code')
+    @field_validator('code', mode="after")
     @classmethod
     def normalize_code(cls, v: str) -> str:
-        return v.strip().upper()
+        return normalize_coupon_code(v)
 
 
 # 6. APPLY COUPON RESPONSE - Frontend ko dikhane ke liye

@@ -132,18 +132,24 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
             if c_item.product.stock_quantity < c_item.quantity:
                 raise InsufficientStockError(c_item.product.name)
 
+            # Atomically deduct in DB with row-level guard against oversell
             stock_update_stmt = (
                 update(Product)
-                .where(Product.id == c_item.product_id, Product.stock_quantity >= c_item.quantity)
+                .where(
+                    Product.id == c_item.product_id,
+                    Product.stock_quantity >= c_item.quantity
+                )
                 .values(stock_quantity=Product.stock_quantity - c_item.quantity)
+                .execution_options(synchronize_session=False)
             )
             upd_result = await db.execute(stock_update_stmt)
 
             if upd_result.rowcount == 0:
                 raise InsufficientStockError(c_item.product.name)
 
-            c_item.product.stock_quantity -= c_item.quantity
-
+            # record_stock_movement reads product.stock_quantity as quantity_before (pre-deduction)
+            # In-memory still has the original value here (synchronize_session=False)
+            # quantity_before=20, quantity_changed=-18, quantity_after=2 → no NegativeStockError
             await record_stock_movement(
                 db=db,
                 product=c_item.product,
@@ -151,6 +157,9 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
                 quantity_changed=-c_item.quantity,
                 reference_id=order_id,
             )
+
+            # NOW sync in-memory to match DB (post-deduction)
+            c_item.product.stock_quantity -= c_item.quantity
 
             db.add(OrderItem(
                 order_id=order_id,

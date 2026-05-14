@@ -80,3 +80,18 @@ async def admin_update_order_status(
     return await order_service.update_order_status_admin(
         db, order_id=order_id, new_status=body.new_status
     )
+
+
+@router.post("/admin-only")
+async def admin_only_action(_: deps.User = Depends(deps.require_roles("admin"))):
+    return {"ok": True}
+
+
+@router.get("/admin-dashboard")
+async def admin_dashboard(_: deps.User = Depends(deps.require_roles("admin"))):
+    return {"msg": "Hello Admin!"}
+
+
+@router.get("/inventory")
+async def view_inventory(_: deps.User = Depends(deps.require_roles("admin", "manager"))):
+    return {"msg": "Access granted to admin or Manager"}
