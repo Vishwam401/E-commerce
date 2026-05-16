@@ -28,3 +28,4 @@ test_sig.py
 # Ignore test and cache folders
 .pytest_cache/
 .hypothesis/
+.frontend/
