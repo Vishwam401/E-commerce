@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/Celery-Active-37814A?style=for-the-badge&logo=celery" />
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker" />
   <img src="https://img.shields.io/badge/Coupons-Engine-FF6B35?style=for-the-badge&logo=ticket" />
+  <img src="https://img.shields.io/badge/Inventory-Management-6C3483?style=for-the-badge&logo=buffer" />
 </p>
 
 <p align="center">
@@ -21,7 +22,7 @@
   <img src="https://img.shields.io/github/last-commit/Vishwam401/E-commerce?color=009688" />
 </p>
 
-> A production-grade, async FastAPI e-commerce backend featuring a secure multi-layer JWT auth system, full cart and order lifecycle, live Razorpay payment integration with a complete server-side webhook handler, Celery-powered async invoice emails, order cancellation with atomic stock rollback, a coupon & discount engine, a complete admin panel, user profile management, and a Docker-first local setup.
+> A production-grade, async FastAPI e-commerce backend featuring a secure multi-layer JWT auth system, full cart and order lifecycle, live Razorpay payment integration with a complete server-side webhook handler, Celery-powered async invoice emails, order cancellation with atomic stock rollback, an advanced coupon & discount engine with per-user limits and caps, a full inventory management system with stock movement audit trail, a complete admin panel, user profile management, a structured custom exception hierarchy, and a Docker-first local setup.
 
 ---
 
@@ -35,7 +36,9 @@
 - [Celery Async Task — Invoice Email](#celery-async-task--invoice-email)
 - [Order State Machine](#order-state-machine)
 - [Coupon & Discount Engine](#coupon--discount-engine)
+- [Inventory Management System](#inventory-management-system)
 - [Admin Panel](#admin-panel)
+- [Custom Exception Hierarchy](#custom-exception-hierarchy)
 - [API Endpoints Reference](#api-endpoints-reference)
 - [Data Models](#data-models)
 - [Local Setup (Docker)](#local-setup-docker)
@@ -74,26 +77,44 @@
 - **Full product management** — create, list (all incl. soft-deleted), partial update, soft-delete
 - **Platform-wide order management** — list all orders with optional `status` filter, paginated
 - **Order status transitions** — enforced via a strict state machine (`VALID_TRANSITIONS`), invalid transitions return a descriptive `400` with allowed next states
-- **Coupon management** — create, list, toggle active/inactive, delete coupons
+- **Coupon management** — create, list (with filters), get by code, partial update, deactivate coupons
+- **Inventory management** — low-stock alerts, reorder alerts, stock summary report, stock adjustments, restocks, movement history, threshold configuration
 - All admin routes guarded by `require_roles("admin")` dependency
 
-### 🎟️ Coupon & Discount Engine *(New)*
+### 🎟️ Coupon & Discount Engine
 - **Two discount types** — `PERCENTAGE` (e.g. 20% off) and `FLAT` (e.g. ₹100 off)
-- **Usage limits** — global `max_uses` cap per coupon; tracked via `used_count`
-- **Per-user usage tracking** — `CouponUsage` table prevents a single user from reusing a coupon
+- **Max discount cap** — `max_discount_cap` field caps the maximum discount for percentage coupons (e.g. "20% off, max ₹200")
+- **Global usage limit** — `max_total_uses` cap per coupon; tracked via `total_used_count`
+- **Per-user usage limit** — `max_uses_per_user` field allows multi-use coupons per user (e.g. loyalty coupons)
+- **Per-user usage tracking** — `CouponUsage` table prevents overuse per user
 - **Minimum order value guard** — `min_order_value` field; coupon rejected if cart subtotal is below threshold
-- **Expiry enforcement** — `valid_until` datetime; expired coupons raise descriptive `400`
+- **Date range enforcement** — `valid_from` + `valid_until` datetime pair; both start and expiry are enforced
 - **Active flag** — admin can enable/disable coupons without deleting them
-- **Atomic usage increment** — `used_count` updated in the same transaction as order creation to prevent race conditions
-- **Checkout integration** — coupon applied at checkout; `coupon_discount` stored on the `Order` for audit trail
+- **Cart-level coupon application** — apply or remove a coupon before checkout via dedicated endpoints
+- **Atomic usage increment** — `total_used_count` updated in the same transaction as order creation
+- **Checkout integration** — coupon discount stored on the `Order` for audit trail
 - **Case-insensitive code lookup** — coupon codes stored and matched uppercase-normalized
-- **Admin CRUD** — full create/list/toggle/delete via `/api/v1/admin/coupons`
-- Apply via `POST /api/v1/orders/checkout` with `coupon_code` field in the request body
+- **Admin CRUD** — full create/list/get/update/deactivate via `/api/v1/admin/coupons`
+
+### 📦 Inventory Management System *(New)*
+- **Stock Movement audit log** — every stock change (sale, return, restock, adjustment) recorded as an immutable `StockMovement` entry
+- **Four movement types** — `SALE`, `RETURN`, `RESTOCK`, `ADJUSTMENT`
+- **Movement metadata** — each movement stores `quantity_before`, `quantity_after`, `quantity_changed`, `reference_id` (e.g. order ID), `reason`, and `performed_by` (admin user)
+- **Negative stock guard** — `NegativeStockError` raised if any operation would reduce stock below zero
+- **Low-stock threshold** — `low_stock_threshold` field on `Product`; admin can query all products below this threshold
+- **Reorder point** — `reorder_point` field on `Product`; separate alert query for products at or below reorder level
+- **Stock summary report** — single endpoint returns `total_active_products`, `out_of_stock_count`, `low_stock_count`, `reorder_alert_count`, and the low-stock product list
+- **Admin stock adjustment** — arbitrary positive/negative `quantity_delta` with mandatory reason (min 10 chars); recorded as `ADJUSTMENT` movement
+- **Admin restock** — positive-only `quantity_to_add`; recorded as `RESTOCK` movement
+- **Per-product movement history** — filterable by `movement_type`, `start_date`, `end_date`, paginated
+- **Threshold configuration** — admin can update `low_stock_threshold` and `reorder_point` per product without touching stock quantity
+- All inventory routes under `/api/v1/admin/inventory`, guarded by `require_roles("admin")`
 
 ### 🛍️ Catalog
 - Category management with **self-referential parent/child hierarchy** (slug-indexed)
 - Product CRUD with **soft delete** — deleted products hidden from listings but retained for order history integrity
 - JSONB `attributes` field for flexible, schema-less product metadata
+- `low_stock_threshold` and `reorder_point` fields on Product for inventory management
 - Pagination support on product listings
 
 ### 🛒 Cart
@@ -103,6 +124,7 @@
 - **Quantity decrement shortcut** — decrements by 1, auto-removes item at zero
 - ORM-level `total_price` property computed from relationships
 - `UniqueConstraint(cart_id, product_id)` — duplicate adds merge quantities
+- **Coupon pre-attachment** — coupon can be applied to cart before checkout via `/api/v1/coupons/cart/apply-coupon`
 
 ### 📦 Orders & Checkout
 - **Razorpay-first checkout** — Razorpay order ID created *before* any DB write, eliminating stock-leak on gateway failure
@@ -118,7 +140,7 @@
 ### ❌ Order Cancellation
 - Users can cancel their own orders in `PENDING`, `PAID`, or `PROCESSING` states
 - **Atomic stock rollback** — stock quantity restored via a direct DB `UPDATE` (not in-memory) for each cancelled item
-- **Coupon usage rollback** — `used_count` decremented when a coupon-applied order is cancelled
+- **Coupon usage rollback** — `total_used_count` decremented and `CouponUsage` record deleted when a coupon-applied order is cancelled
 - **Guard rails** — `SHIPPED` and `DELIVERED` orders cannot be cancelled; returns descriptive `400`
 - Full rollback on any exception — no partial state left in DB
 
@@ -155,9 +177,15 @@
 - **Atomic default switching** — race-condition safe; only one address can be default at a time
 - User-scoped queries — users cannot access or modify each other's addresses
 
+### 🏗️ Custom Exception Hierarchy *(New)*
+- **Structured `AppException` base** — every custom error inherits from it; HTTP status code and error code are co-located with the exception class
+- **Domain-specific exception types** — auth, orders, payments, coupons, inventory, and more (see [Custom Exception Hierarchy](#custom-exception-hierarchy))
+- **Global error handlers** — `error_handlers.py` registers FastAPI exception handlers for `AppException`, `RequestValidationError`, `SQLAlchemyError`, `IntegrityError`, and `RedisError`; generic `Exception` handler acts as safety net
+
 ### ⚙️ Developer Experience
-- **Modular model architecture** — models split across `user`, `product`, `cart`, `order`, `address`, `transaction`, `coupon`
+- **Modular model architecture** — models split across `user`, `product`, `cart`, `order`, `address`, `transaction`, `coupon`, `inventory`, `webhook_event`
 - **Service layer pattern** — all business logic in `app/services/`, routes stay thin
+- **Validators module** — `app/validators/` layer with reusable validators for coupons, addresses, orders, and users
 - **Async SQLAlchemy** with `asyncpg` driver throughout
 - **Alembic** migration support for modular schema evolution
 - **System-wide structured logging** via `logging_config.py`
@@ -184,22 +212,27 @@ E-Commerce/
 │   │       ├── order.py              # Checkout, verify-payment, cancel, order history
 │   │       ├── address.py            # Address book endpoints
 │   │       ├── users.py              # User profile & personal order history
-│   │       ├── admin.py              # Admin panel — products, orders & coupons
+│   │       ├── admin.py              # Admin panel — products & orders
+│   │       ├── coupon.py             # Coupon endpoints (user cart-level + admin CRUD)   ← Updated
+│   │       ├── inventory.py          # Inventory management endpoints (admin)             ← New
 │   │       └── webhooks.py           # Razorpay webhook receiver
 │   ├── core/
 │   │   ├── config.py                 # Pydantic settings (env-driven, incl. Razorpay + Webhook)
 │   │   ├── redis.py                  # Redis client + rate limiting logic
 │   │   ├── security.py               # JWT creation, blacklist, Argon2 hashing
+│   │   ├── exceptions.py             # Custom exception hierarchy (AppException + all subtypes) ← New
+│   │   ├── error_handlers.py         # Global FastAPI exception handlers                        ← New
 │   │   └── logging_config.py         # Structured logging setup
 │   ├── db/
 │   │   ├── models/
 │   │   │   ├── user.py               # User model
-│   │   │   ├── product.py            # Product, Category (self-referential)
+│   │   │   ├── product.py            # Product (+ low_stock_threshold, reorder_point), Category
 │   │   │   ├── cart.py               # Cart, CartItem
 │   │   │   ├── order.py              # Order, OrderItem, OrderStatus enum
 │   │   │   ├── address.py            # Address, AddressType enum
 │   │   │   ├── transaction.py        # Razorpay Transaction
-│   │   │   ├── coupon.py             # Coupon, CouponUsage                      ← New
+│   │   │   ├── coupon.py             # Coupon (+ max_discount_cap, max_uses_per_user, valid_from), CouponUsage
+│   │   │   ├── inventory.py          # StockMovement, StockMovementType enum    ← New
 │   │   │   └── webhook_event.py      # WebhookEvent audit log
 │   │   ├── base.py
 │   │   ├── base_class.py
@@ -209,18 +242,26 @@ E-Commerce/
 │   │   ├── product.py                # ProductCreate, ProductUpdate, ProductResponse
 │   │   ├── cart.py
 │   │   ├── order.py                  # OrderOut, CheckoutRequest, PaymentVerifyRequest, OrderStatusUpdate
-│   │   ├── coupon.py                 # CouponCreate, CouponOut, CouponApplyRequest  ← New
+│   │   ├── coupon.py                 # CouponCreate, CouponUpdate, CouponResponse, ApplyCouponRequest/Response, CouponAdminListResponse
+│   │   ├── inventory.py              # StockMovementResponse, AdminAdjustRequest, AdminRestockRequest, LowStockProductResponse, StockSummaryReport, ProductThresholdUpdate ← New
 │   │   └── address.py
 │   ├── services/
 │   │   ├── cart_service.py           # CartService (full cart lifecycle)
-│   │   ├── order_service.py          # checkout (with coupon), verify_payment, cancel, admin order fns
-│   │   ├── coupon_service.py         # CouponService — validate, apply, rollback    ← New
+│   │   ├── order_service.py          # checkout, verify_payment, cancel, admin order fns
+│   │   ├── coupon_service.py         # validate, apply, remove, rollback, admin CRUD
+│   │   ├── inventory_service.py      # record_stock_movement, low-stock, reorder alerts, adjust, restock, thresholds ← New
 │   │   ├── product_service.py        # ProductService (CRUD, soft delete, admin list)
 │   │   ├── category_service.py       # CatalogService
 │   │   ├── address_service.py        # AddressService (default, soft delete)
 │   │   ├── user_service.py           # update_user_profile (with row lock)
 │   │   ├── webhook_service.py        # RazorpayWebhookService (verify + handle)
 │   │   └── utils.py
+│   ├── validators/                   # Reusable field-level validators             ← New
+│   │   ├── __init__.py               # Re-exports all validators
+│   │   ├── coupon.py                 # normalize_coupon_code, validate_discount_value, validate_discount_cap, validate_coupon_dates
+│   │   ├── address.py
+│   │   ├── order.py
+│   │   └── user.py
 │   ├── utils/
 │   │   └── email.py                  # FastAPI-Mail background email sender
 │   ├── worker/
@@ -229,7 +270,9 @@ E-Commerce/
 │   └── main.py                       # FastAPI app, all router registrations
 ├── docker-compose.yml
 ├── Dockerfile
+├── pytest.ini
 ├── requirements.txt
+├── STOCK_RESERVATION_FEATURE.md
 └── alembic.ini
 ```
 
@@ -309,8 +352,11 @@ Depends(require_roles("admin", "manager"))   # Admin OR Manager
 POST /api/v1/orders/checkout
   ├── Validate cart is non-empty
   ├── Validate shipping address (user-owned, not deleted)
-  ├── Validate & apply coupon (if coupon_code in request)
-  │   → Check expiry, active status, max_uses, per-user usage, min_order_value
+  ├── Validate & apply coupon (if coupon attached to cart)
+  │   → Check valid_from <= now <= valid_until
+  │   → Check is_active, max_total_uses, max_uses_per_user
+  │   → Check min_order_value
+  │   → Apply max_discount_cap for percentage coupons
   ├── Compute: subtotal + 18% GST − coupon_discount + ₹50 shipping (waived above ₹500)
   ├── Guard: amount must be ≥ ₹1 (100 paise)
   ├── ── RAZORPAY FIRST (no DB writes yet) ──────────────────────────
@@ -320,7 +366,7 @@ POST /api/v1/orders/checkout
   │   → Create Order record (coupon_discount stored)
   │   → Atomic stock decrement per item (rowcount-checked)
   │   → Create OrderItem with price_at_purchase + product_name snapshot
-  │   → Increment coupon.used_count (same transaction)
+  │   → Increment coupon.total_used_count (same transaction)
   │   → Create CouponUsage record (same transaction)
   │   → Clear Cart
   │   → Create Transaction (PENDING, razorpay_order_id saved)
@@ -411,34 +457,40 @@ PENDING ──────┬──► PAID ──► PROCESSING ──► SHIPP
 ### How it works
 
 ```
-User applies coupon at checkout → POST /api/v1/orders/checkout
-  {
-    "address_id": "...",
-    "coupon_code": "SAVE20"   ← optional
-  }
+User applies coupon to cart → POST /api/v1/coupons/cart/apply-coupon
+  { "code": "SAVE20" }
+
+User proceeds to checkout → POST /api/v1/orders/checkout
+  (coupon already attached to cart)
 
 CouponService.validate_and_apply(code, user_id, subtotal):
   1. Lookup coupon by code (case-insensitive, uppercase-normalized)
-  2. Check coupon.is_active == True                  → 400 if inactive
-  3. Check coupon.valid_until >= now()               → 400 if expired
-  4. Check coupon.used_count < coupon.max_uses       → 400 if exhausted
-  5. Check subtotal >= coupon.min_order_value        → 400 with min value in message
-  6. Check CouponUsage(coupon_id, user_id) not exists → 400 "already used"
+  2. Check coupon.is_active == True                        → 400 if inactive
+  3. Check valid_from <= now() <= valid_until              → 400 if outside range
+  4. Check coupon.total_used_count < coupon.max_total_uses → 400 if exhausted
+  5. Check per-user usage < coupon.max_uses_per_user      → 400 if user limit hit
+  6. Check subtotal >= coupon.min_order_value             → 400 with min value in message
   7. Calculate discount:
-       PERCENTAGE → subtotal * (value / 100)
-       FLAT       → min(value, subtotal)   ← never discounts below ₹0
+       PERCENTAGE → min(subtotal * (value / 100), max_discount_cap)   ← cap applied if set
+       FLAT       → min(value, subtotal)                               ← never below ₹0
   8. Return discount_amount (does NOT commit — checkout transaction handles it)
 
 On Order creation (same atomic transaction):
-  → coupon.used_count += 1
+  → coupon.total_used_count += 1
   → CouponUsage(coupon_id, user_id, order_id) inserted
   → order.coupon_id = coupon.id
   → order.coupon_discount = discount_amount
 
 On Order cancellation:
-  → coupon.used_count -= 1
+  → coupon.total_used_count -= 1
   → CouponUsage record deleted
   → order.coupon_discount remains for audit trail
+
+Admin can also:
+  → Remove coupon from cart: DELETE /api/v1/coupons/cart/remove-coupon
+  → Partial update: PATCH /api/v1/admin/coupons/{code}
+  → Deactivate: PATCH /api/v1/admin/coupons/{code}/deactivate
+  → Fetch by code: GET /api/v1/admin/coupons/{code}
 ```
 
 ### Coupon Model
@@ -450,8 +502,11 @@ On Order cancellation:
 | `discount_type` | Enum | `PERCENTAGE` or `FLAT` |
 | `discount_value` | Numeric | % value or ₹ flat amount |
 | `min_order_value` | Numeric | Minimum subtotal to apply, default 0 |
-| `max_uses` | Integer | Global usage cap |
-| `used_count` | Integer | Auto-incremented on use |
+| `max_discount_cap` | Numeric | Max ₹ cap for percentage discounts (optional) |
+| `max_total_uses` | Integer | Global usage cap |
+| `max_uses_per_user` | Integer | Per-user usage cap (default 1) |
+| `total_used_count` | Integer | Auto-incremented on use |
+| `valid_from` | DateTime(tz) | Start datetime |
 | `valid_until` | DateTime(tz) | Expiry datetime |
 | `is_active` | Boolean | Admin toggle |
 | `created_at` | DateTime | Auto-set |
@@ -465,7 +520,63 @@ On Order cancellation:
 | `user_id` | FK → User | Indexed |
 | `order_id` | FK → Order | For audit trail |
 | `used_at` | DateTime | Auto-set |
-| `UniqueConstraint` | (coupon_id, user_id) | One use per user per coupon |
+| `UniqueConstraint` | (coupon_id, user_id) | Enforces per-user limit |
+
+---
+
+## Inventory Management System
+
+### How it works
+
+```
+Every stock change creates an immutable StockMovement record.
+
+Admin triggers:
+  POST /api/v1/admin/inventory/{product_id}/adjust
+    → quantity_delta (positive or negative), reason (min 10 chars)
+    → Records ADJUSTMENT movement
+    → NegativeStockError raised if result < 0
+
+  POST /api/v1/admin/inventory/{product_id}/restock
+    → quantity_to_add (positive only)
+    → Records RESTOCK movement
+
+  PATCH /api/v1/admin/inventory/{product_id}/thresholds
+    → Updates low_stock_threshold and/or reorder_point on Product
+
+Automatic triggers (by order service):
+  → Checkout:      records SALE movement per item
+  → Cancellation:  records RETURN movement per item
+
+Admin queries:
+  GET /api/v1/admin/inventory/low-stock        → products below low_stock_threshold (paginated)
+  GET /api/v1/admin/inventory/reorder-alerts   → products at or below reorder_point
+  GET /api/v1/admin/inventory/report           → aggregated summary stats
+  GET /api/v1/admin/inventory/{product_id}/movements
+    → filterable by movement_type, start_date, end_date; paginated
+```
+
+### StockMovement Model
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | UUID | Primary key |
+| `product_id` | FK → Product | Indexed, CASCADE on delete |
+| `movement_type` | Enum | `SALE`, `RETURN`, `RESTOCK`, `ADJUSTMENT` |
+| `quantity_changed` | Integer | Signed delta (negative for SALE) |
+| `quantity_before` | Integer | Stock snapshot before change |
+| `quantity_after` | Integer | Stock snapshot after change |
+| `reference_id` | UUID | Optional — e.g. Order ID for SALE/RETURN |
+| `reason` | String(500) | Optional description |
+| `performed_by` | FK → User | Admin who triggered manual changes |
+| `created_at` | DateTime | Auto-set, indexed |
+
+### Product Inventory Fields (additions to existing model)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `low_stock_threshold` | Integer | Alert threshold; configurable per product |
+| `reorder_point` | Integer | Reorder alert level; configurable per product |
 
 ---
 
@@ -493,10 +604,70 @@ All admin routes are under `/api/v1/admin` and require `require_roles("admin")`.
 
 | Action | What it does |
 |--------|-------------|
-| Create coupon | Full coupon creation with type, value, expiry, limits |
-| List coupons | All coupons with usage stats (`used_count / max_uses`) |
-| Toggle active | Enable / disable a coupon without deleting it |
-| Delete coupon | Hard delete (only if `used_count == 0`; else soft-disable recommended) |
+| Create coupon | Full coupon creation with type, value, cap, date range, per-user limits |
+| List coupons | All coupons with filters (`active_only`, `expired`, `search`), paginated |
+| Get coupon by code | Fetch single coupon details |
+| Update coupon | Partial update of any field(s) |
+| Deactivate coupon | Set `is_active=False` without deleting |
+
+### Inventory Management
+
+| Action | What it does |
+|--------|-------------|
+| Low-stock report | Lists all products below their `low_stock_threshold` |
+| Reorder alerts | Lists all products at or below `reorder_point` |
+| Stock summary | Aggregated report — total, out-of-stock, low-stock, reorder counts |
+| Movement history | Per-product audit log, filterable by type and date range |
+| Adjust stock | Positive or negative `quantity_delta` with mandatory reason |
+| Restock | Add positive stock quantity with optional reason |
+| Update thresholds | Set `low_stock_threshold` and `reorder_point` per product |
+
+---
+
+## Custom Exception Hierarchy
+
+```
+Exception (Python built-in)
+└── AppException (Base — HTTP status + error_code co-located)
+    ├── BadRequestError (400)
+    │   ├── CartEmptyError
+    │   ├── InsufficientStockError
+    │   ├── ProductUnavailableError
+    │   ├── InvalidAddressError
+    │   ├── MinimumOrderError
+    │   ├── PaymentVerificationError
+    │   ├── OrderCancellationError
+    │   ├── InvalidStatusTransitionError
+    │   ├── InvalidTokenError
+    │   ├── WebhookSignatureError
+    │   ├── CouponInactiveError
+    │   ├── CouponExpiredError
+    │   ├── CouponLimitReachedError
+    │   ├── CouponUserLimitReachedError
+    │   ├── MinimumOrderNotMetError
+    │   ├── CouponAlreadyAppliedError
+    │   ├── NegativeStockError              ← Inventory
+    │   ├── StockAdjustmentReasonRequired   ← Inventory
+    │   └── InvalidStockQuantityError       ← Inventory
+    ├── UnauthorizedError (401)
+    │   ├── AuthenticationError
+    │   ├── TokenCompromisedError
+    │   └── SessionInvalidatedError
+    ├── ForbiddenError (403)
+    │   └── AccountInactiveError
+    ├── NotFoundError (404)
+    │   └── CouponNotFoundError
+    ├── ConflictError (409)
+    │   ├── EmailAlreadyExistsError
+    │   └── UsernameAlreadyExistsError
+    ├── RateLimitError (429)
+    └── ServiceUnavailableError (503)
+        ├── PaymentGatewayError
+        ├── DatabaseError
+        └── DataIntegrityError
+```
+
+Global handlers in `error_handlers.py` catch all `AppException` subtypes and return structured JSON with `status_code`, `error_code`, and `message`. A final `Exception` handler acts as a safety net for anything unexpected.
 
 ---
 
@@ -533,10 +704,30 @@ All admin routes are under `/api/v1/admin` and require `require_roles("admin")`.
 | `DELETE` | `/api/v1/admin/products/{id}` | Admin | Soft-delete product |
 | `GET` | `/api/v1/admin/orders` | Admin | List all orders (filterable by status) |
 | `PATCH` | `/api/v1/admin/orders/{id}/status` | Admin | Update order status |
+
+### Coupons — `/api/v1/coupons` & `/api/v1/admin/coupons`
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/v1/coupons/cart/apply-coupon` | Bearer | Apply coupon to active cart |
+| `DELETE` | `/api/v1/coupons/cart/remove-coupon` | Bearer | Remove coupon from active cart |
 | `POST` | `/api/v1/admin/coupons` | Admin | Create coupon |
-| `GET` | `/api/v1/admin/coupons` | Admin | List all coupons with stats |
-| `PATCH` | `/api/v1/admin/coupons/{id}/toggle` | Admin | Enable / disable coupon |
-| `DELETE` | `/api/v1/admin/coupons/{id}` | Admin | Delete coupon |
+| `GET` | `/api/v1/admin/coupons` | Admin | List coupons (filterable, paginated) |
+| `GET` | `/api/v1/admin/coupons/{code}` | Admin | Get coupon by code |
+| `PATCH` | `/api/v1/admin/coupons/{code}` | Admin | Partial update coupon |
+| `PATCH` | `/api/v1/admin/coupons/{code}/deactivate` | Admin | Deactivate coupon |
+
+### Inventory — `/api/v1/admin/inventory`
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/api/v1/admin/inventory/low-stock` | Admin | Products below low-stock threshold |
+| `GET` | `/api/v1/admin/inventory/reorder-alerts` | Admin | Products at/below reorder point |
+| `GET` | `/api/v1/admin/inventory/report` | Admin | Aggregated stock summary |
+| `GET` | `/api/v1/admin/inventory/{product_id}/movements` | Admin | Movement history (filterable, paginated) |
+| `POST` | `/api/v1/admin/inventory/{product_id}/adjust` | Admin | Adjust stock (positive or negative delta) |
+| `POST` | `/api/v1/admin/inventory/{product_id}/restock` | Admin | Add stock (positive only) |
+| `PATCH` | `/api/v1/admin/inventory/{product_id}/thresholds` | Admin | Update low-stock / reorder thresholds |
 
 ### Catalog — `/api/v1/products`
 
@@ -564,7 +755,7 @@ All admin routes are under `/api/v1/admin` and require `require_roles("admin")`.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/api/v1/orders/checkout` | Bearer | Create Razorpay order + DB order (optional coupon) |
+| `POST` | `/api/v1/orders/checkout` | Bearer | Create Razorpay order + DB order |
 | `POST` | `/api/v1/orders/verify-payment` | Bearer | Verify signature, mark PAID |
 | `GET` | `/api/v1/orders/` | Bearer | List paid orders |
 | `GET` | `/api/v1/orders/{id}` | Bearer | Get order details |
@@ -606,10 +797,10 @@ All admin routes are under `/api/v1/admin` and require `require_roles("admin")`.
 
 ### Product & Category
 - `Category` — self-referential `parent_id`, soft delete, `sub_categories` lazy-loaded via `selectin`
-- `Product` — JSONB `attributes`, soft delete, slug auto-generated from name
+- `Product` — JSONB `attributes`, soft delete, slug auto-generated from name, `low_stock_threshold` and `reorder_point` for inventory alerts
 
 ### Cart & CartItem
-- `Cart` — user-scoped, auto-created; `total_price` as ORM `@property`
+- `Cart` — user-scoped, auto-created; `total_price` as ORM `@property`; coupon pre-attachable
 - `CartItem` — `UniqueConstraint(cart_id, product_id)`, real-time stock validation
 
 ### Order & OrderItem
@@ -643,6 +834,9 @@ All admin routes are under `/api/v1/admin` and require `require_roles("admin")`.
 
 ### Coupon & CouponUsage
 See [Coupon & Discount Engine](#coupon--discount-engine) section above.
+
+### StockMovement
+See [Inventory Management System](#inventory-management-system) section above.
 
 ### WebhookEvent
 | Field | Notes |
@@ -751,13 +945,18 @@ docker compose exec api alembic upgrade head
 5. **Update profile** → `PATCH /api/v1/users/me`
 6. **Add address** → `POST /api/v1/addresses/`
 7. **Add items to cart** → `POST /api/v1/cart/items`
-8. **Create coupon (admin)** → `POST /api/v1/admin/coupons`
-9. **Checkout with coupon** → `POST /api/v1/orders/checkout` with `coupon_code` → invoice email queued via Celery
-10. **Verify payment** → `POST /api/v1/orders/verify-payment`
-11. **Webhook test** → `POST /api/v1/webhooks/razorpay` with valid `x-razorpay-signature` header
-12. **Cancel order** → `PATCH /api/v1/orders/{id}/cancel` (only PENDING/PAID/PROCESSING; coupon usage rolled back)
-13. **Admin: update order status** → `PATCH /api/v1/admin/orders/{id}/status`
-14. **Rate limit test** → 6+ bad login attempts → `429`; wait 60s → works again
+8. **Create coupon (admin)** → `POST /api/v1/admin/coupons` (with `max_discount_cap`, `max_uses_per_user`, `valid_from`)
+9. **Apply coupon to cart** → `POST /api/v1/coupons/cart/apply-coupon`
+10. **Checkout** → `POST /api/v1/orders/checkout` → invoice email queued via Celery
+11. **Verify payment** → `POST /api/v1/orders/verify-payment`
+12. **Webhook test** → `POST /api/v1/webhooks/razorpay` with valid `x-razorpay-signature` header
+13. **Cancel order** → `PATCH /api/v1/orders/{id}/cancel` (PENDING/PAID/PROCESSING; coupon + stock rolled back)
+14. **Admin: update order status** → `PATCH /api/v1/admin/orders/{id}/status`
+15. **Admin: stock summary** → `GET /api/v1/admin/inventory/report`
+16. **Admin: restock product** → `POST /api/v1/admin/inventory/{product_id}/restock`
+17. **Admin: view movement history** → `GET /api/v1/admin/inventory/{product_id}/movements`
+18. **Admin: set thresholds** → `PATCH /api/v1/admin/inventory/{product_id}/thresholds`
+19. **Rate limit test** → 6+ bad login attempts → `429`; wait 60s → works again
 
 ---
 
@@ -799,7 +998,10 @@ docker compose exec api alembic upgrade head
 - [x] User Profile — fetch & update with phone validation
 - [x] Razorpay webhook handler — server-side payment confirmation with audit log
 - [x] Celery async tasks — HTML invoice email on payment confirmation
-- [x] Coupon & Discount Engine — percentage/flat, per-user tracking, expiry, usage limits
+- [x] Coupon & Discount Engine — percentage/flat, per-user limits, expiry, usage cap, max discount cap
+- [x] Inventory Management System — stock movement audit trail, low-stock alerts, reorder points, admin adjust/restock
+- [x] Custom Exception Hierarchy — domain-specific errors with structured HTTP responses
+- [x] Validators module — reusable field-level validators extracted from schemas
 - [ ] Redis-backed cart caching
 - [ ] Sentry error tracking integration
 - [ ] Product reviews & ratings
