@@ -14,6 +14,7 @@ from app.db.models.order import Order, OrderItem, OrderStatus
 from app.db.models.transaction import Transaction
 from app.db.models.address import Address
 from app.db.models import Product
+from app.db.models.user import User
 from app.core.config import settings
 from app.core.exceptions import (
     AppException,
@@ -34,7 +35,13 @@ from app.core.exceptions import (
 from app.services.inventory_service import record_stock_movement
 from app.db.models.inventory import StockMovementType
 from app.services.coupon_service import use_coupon_in_checkout
-from app.core.websocket_manager import manager
+from ..core.websocket_manager import manager
+from .notification_service import (
+    NotificationService,
+    NotificationPayload,
+    NotificationChannel,
+    NotificationType,
+)
 
 client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_SECRET_KEY))
 logger = logging.getLogger(__name__)
@@ -51,6 +58,42 @@ VALID_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
 
 def round_money(amount: Decimal):
     return amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+def apply_transition(order: Order, new_status: OrderStatus) -> OrderStatus:
+
+    if new_status == order.status:
+        return order.status
+
+    allowed = VALID_TRANSITIONS.get(order.status, set())
+    if new_status not in allowed:
+        raise InvalidStatusTransitionError(
+            current=order.status.value,
+            target=new_status.value,
+            allowed=[s.value for s in allowed]
+        )
+
+    old_status = order.status
+    order.status = new_status
+    return old_status
+
+
+def _map_status_to_notification(status: OrderStatus) -> NotificationType:
+
+    mapping = {
+        OrderStatus.PAID:       NotificationType.PAYMENT_CONFIRMED,
+        OrderStatus.PROCESSING: NotificationType.ORDER_STATUS_UPDATE,
+        OrderStatus.SHIPPED:    NotificationType.ORDER_SHIPPED,
+        OrderStatus.DELIVERED:  NotificationType.ORDER_DELIVERED,
+        OrderStatus.CANCELLED:  NotificationType.ORDER_CANCELLED,
+    }
+    return mapping.get(status, NotificationType.ORDER_STATUS_UPDATE)
+
+
+async def _fetch_user(db: AsyncSession, user_id: uuid.UUID) -> User | None:
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    return result.scalar_one_or_none()
 
 
 async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: uuid.UUID):
@@ -148,9 +191,6 @@ async def checkout_user_cart(db: AsyncSession, user_id: uuid.UUID, address_id: u
             if upd_result.rowcount == 0:
                 raise InsufficientStockError(c_item.product.name)
 
-            # record_stock_movement reads product.stock_quantity as quantity_before (pre-deduction)
-            # In-memory still has the original value here (synchronize_session=False)
-            # quantity_before=20, quantity_changed=-18, quantity_after=2 → no NegativeStockError
             await record_stock_movement(
                 db=db,
                 product=c_item.product,
@@ -289,32 +329,56 @@ async def verify_razorpay_payment(
             None, lambda: client.utility.verify_payment_signature(payload)
         )
 
-        old_status = order.status
+        old_status = apply_transition(order, OrderStatus.PAID)
 
         transaction.status = "SUCCESS"
         transaction.razorpay_payment_id = razorpay_payment_id
         transaction.razorpay_signature = razorpay_signature
-        order.status = OrderStatus.PAID
 
         await db.commit()
 
         logger.info(f"Payment SUCCESS verified for Order: {order.id}")
 
+        # ── WEBSOCKET broadcast (direct — fast, no queue needed) ──────────────
         try:
             await manager.broadcast_to_order(
-                order_id = str(order.id),
+                order_id=str(order.id),
                 message={
                     "event": "order.status_updated",
                     "data": {
                         "order_id": str(order.id),
                         "old_status": old_status.value,
                         "new_status": OrderStatus.PAID.value,
-                        "message": "Payement confirmed successfully",
+                        "message": "Payment confirmed successfully",
                     },
                 },
             )
         except Exception as e:
             logger.warning(f"[WS] Broadcast failed | order={order.id} | err={e}")
+
+        # ── NOTIFICATION (email via Celery) ────────────────────────────────────
+        # DB commit ho chuka hai — notification fail hone se order affected nahi hoga.
+        # Isliye alag try/except mein hai.
+        try:
+            user = await _fetch_user(db, order.user_id)
+            if user:
+                await NotificationService.dispatch(NotificationPayload(
+                    user_id=str(user.id),
+                    user_email=user.email,
+                    order_id=str(order.id),
+                    notification_type=NotificationType.PAYMENT_CONFIRMED,
+                    data={
+                        "username":       getattr(user, "username", None) or "Customer",
+                        "order_id_short": str(order.id)[:8],
+                        "amount":         float(order.total_price),
+                        "payment_id":     razorpay_payment_id,
+                        "old_status":     old_status.value,
+                        "new_status":     OrderStatus.PAID.value,
+                    },
+                    channels=[NotificationChannel.EMAIL, NotificationChannel.WEBSOCKET],
+                ))
+        except Exception as e:
+            logger.error(f"[NOTIFY] Payment notify failed for order {order.id}: {e}")
 
         return {
             "status": "success",
@@ -364,8 +428,7 @@ async def process_order_cancellation(
         if order.status == OrderStatus.CANCELLED:
             return order
 
-        if order.status in [OrderStatus.SHIPPED, OrderStatus.DELIVERED]:
-            raise OrderCancellationError(order.status.value)
+        apply_transition(order, OrderStatus.CANCELLED)
 
         for item in order.items:
             if not item.product:
@@ -392,11 +455,33 @@ async def process_order_cancellation(
                     reference_id=order_id,
                 )
 
-        order.status = OrderStatus.CANCELLED
         await db.commit()
         await db.refresh(order)
 
         logger.info(f"Order {order_id} successfully cancelled by user {user_id}")
+
+        # ── NOTIFICATION ───────────────────────────────────────────────────────
+        # DB commit ke baad — notification fail = order still cancelled.
+        try:
+            user = await _fetch_user(db, order.user_id)
+            if user:
+                await NotificationService.dispatch(NotificationPayload(
+                    user_id=str(user.id),
+                    user_email=user.email,
+                    order_id=str(order.id),
+                    notification_type=NotificationType.ORDER_CANCELLED,
+                    data={
+                        "username":       getattr(user, "username", None) or "Customer",
+                        "order_id_short": str(order.id)[:8],
+                        "total_price":    float(order.total_price),
+                        "old_status":     OrderStatus.PROCESSING.value,
+                        "new_status":     OrderStatus.CANCELLED.value,
+                    },
+                    channels=[NotificationChannel.EMAIL, NotificationChannel.WEBSOCKET],
+                ))
+        except Exception as e:
+            logger.error(f"[NOTIFY] Cancel notify failed for order {order.id}: {e}")
+
         return order
 
     except SQLAlchemyError as exc:
@@ -445,19 +530,7 @@ async def update_order_status_admin(
     if not order:
         raise NotFoundError("Order not found.")
 
-    if new_status == order.status:
-        return order
-
-    allowed = VALID_TRANSITIONS.get(order.status, set())
-    if new_status not in allowed:
-        raise InvalidStatusTransitionError(
-            current=order.status.value,
-            target=new_status.value,
-            allowed=[s.value for s in allowed]
-        )
-
-    old_status = order.status
-    order.status = new_status
+    old_status = apply_transition(order, new_status)
 
     await db.commit()
     await db.refresh(order)
@@ -467,20 +540,27 @@ async def update_order_status_admin(
         f"{old_status.value} → {new_status.value}"
     )
 
+    # ── NOTIFICATION (email via Celery) ────────────────────────────────────────
+    # DB commit ho chuka hai — notification side-effect hai, critical nahi.
     try:
-        await manager.broadcast_to_order(
-            order_id=str(order.id),
-            message={
-                "event": "order.status_updated",
-                "data":{
-                    "order_id": str(order.id),
-                    "old_status": old_status.value,
-                    "new_status": new_status.value,
-                    "updated_at": order.updated_at.isoformat() if order.updated_at else None,
+        user = await _fetch_user(db, order.user_id)
+        if user:
+            await NotificationService.dispatch(NotificationPayload(
+                user_id=str(user.id),
+                user_email=user.email,
+                order_id=str(order.id),
+                notification_type=_map_status_to_notification(new_status),
+                data={
+                    "username":       getattr(user, "username", None) or "Customer",
+                    "order_id_short": str(order.id)[:8],
+                    "old_status":     old_status.value,
+                    "new_status":     new_status.value,
+                    "total_price":    float(order.total_price),
+                    "updated_at":     order.updated_at.isoformat() if order.updated_at else None,
                 },
-            },
-        )
+                channels=[NotificationChannel.EMAIL, NotificationChannel.WEBSOCKET],
+            ))
     except Exception as e:
-        logger.warning(f"[WS] Broadcast failed | order={order.id} | err={e}")
+        logger.error(f"[NOTIFY] Dispatch failed for order {order.id}: {e}")
 
     return order
