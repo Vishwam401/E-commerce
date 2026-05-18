@@ -16,7 +16,7 @@ from app.core.exceptions import (
 from app.db.models.transaction import Transaction
 from app.db.models.order import Order, OrderStatus
 from app.db.models.user import User
-from app.worker.tasks import send_invoice_email
+from ..worker.tasks import send_notification_email
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +103,17 @@ class RazorpayWebhookService:
                 real_user = user_result.scalar_one_or_none()
 
                 if real_user and real_user.email:
-                    send_invoice_email.delay(
-                        user_email=real_user.email,
-                        user_id=str(real_user.id),
-                        order_id=str(order.id),
-                        amount=float(order.total_price)
+                    send_notification_email.delay(
+                        to_email=real_user.email,
+                        subject=f"Payment Receipt - Order #{str(order.id)[-6:]}",
+                        template_name="payment.confirmed",
+                        context={
+                            "order_id_short": str(order.id)[-6:],
+                            "username": getattr(real_user, "name", "Customer"),
+                            "amount": str(float(order.total_price)),
+
+                            "payment_id": payment_entity.get("id", ""),
+                        },
                     )
                     logger.info(f"Invoice email queued for Order {order.id}")
             except Exception as email_error:
