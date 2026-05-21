@@ -1,879 +1,780 @@
-# Alpha-Commerce — FastAPI E-Commerce Backend
-
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=28&pause=1000&color=009688&center=true&vCenter=true&width=600&lines=Alpha-Commerce+%F0%9F%9B%92;Production-Grade+FastAPI+Backend;Secure+%7C+Async+%7C+Payment-Ready" alt="Typing SVG" />
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=28&duration=3000&pause=1000&color=00BFA6&center=true&vCenter=true&multiline=true&width=600&height=80&lines=%CE%B1+Alpha-Commerce;Production-Grade+E-Commerce+Backend" alt="Alpha-Commerce" />
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/FastAPI-0.135-009688?style=for-the-badge&logo=fastapi" />
-  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python" />
-  <img src="https://img.shields.io/badge/PostgreSQL-15-4169E1?style=for-the-badge&logo=postgresql" />
-  <img src="https://img.shields.io/badge/Redis-Alpine-DC382D?style=for-the-badge&logo=redis" />
-  <img src="https://img.shields.io/badge/Razorpay-Webhook-02042B?style=for-the-badge&logo=razorpay" />
-  <img src="https://img.shields.io/badge/Celery-Active-37814A?style=for-the-badge&logo=celery" />
-  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker" />
-  <img src="https://img.shields.io/badge/Coupons-Engine-FF6B35?style=for-the-badge&logo=ticket" />
-  <img src="https://img.shields.io/badge/Inventory-Management-6C3483?style=for-the-badge&logo=buffer" />
+  <strong>A fully async FastAPI backend with live payments, multi-layer auth, and enterprise-grade inventory — built from scratch.</strong>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/stars/Vishwam401/E-commerce?style=social" />
-  <img src="https://img.shields.io/github/forks/Vishwam401/E-commerce?style=social" />
-  <img src="https://img.shields.io/github/last-commit/Vishwam401/E-commerce?color=009688" />
+  <a href="#-quick-start"><img src="https://img.shields.io/badge/-Quick_Start-00BFA6?style=for-the-badge&logoColor=white" /></a>
+  <a href="#-architecture"><img src="https://img.shields.io/badge/-Architecture-6C63FF?style=for-the-badge&logoColor=white" /></a>
+  <a href="#-api-reference"><img src="https://img.shields.io/badge/-API_Docs-FF6B6B?style=for-the-badge&logoColor=white" /></a>
+  <a href="#-deep-dives"><img src="https://img.shields.io/badge/-Deep_Dives-FFA726?style=for-the-badge&logoColor=white" /></a>
 </p>
 
-> A production-grade, async FastAPI e-commerce backend featuring a secure multi-layer JWT auth system, full cart and order lifecycle, live Razorpay payment integration with a complete server-side webhook handler, Celery-powered async invoice emails, order cancellation with atomic stock rollback, an advanced coupon & discount engine with per-user limits and caps, a full inventory management system with stock movement audit trail, a complete admin panel, user profile management, a structured custom exception hierarchy, and a Docker-first local setup.
+<p align="center">
+  <img src="https://img.shields.io/badge/FastAPI-0.135-009688?style=flat-square&logo=fastapi&logoColor=white" />
+  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat-square&logo=postgresql&logoColor=white" />
+  <img src="https://img.shields.io/badge/Redis-Alpine-DC382D?style=flat-square&logo=redis&logoColor=white" />
+  <img src="https://img.shields.io/badge/Razorpay-Live-02042B?style=flat-square&logo=razorpay&logoColor=white" />
+  <img src="https://img.shields.io/badge/Celery-5.x-37814A?style=flat-square&logo=celery&logoColor=white" />
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/stars/Vishwam401/E-commerce?style=flat-square&color=00BFA6" />
+  <img src="https://img.shields.io/github/forks/Vishwam401/E-commerce?style=flat-square&color=6C63FF" />
+  <img src="https://img.shields.io/github/last-commit/Vishwam401/E-commerce?style=flat-square&color=FFA726" />
+</p>
 
 ---
 
-## Table of Contents
+## ✨ Highlights
 
-- [Feature Overview](#feature-overview)
-- [Architecture & Project Structure](#architecture--project-structure)
-- [Authentication System — Deep Dive](#authentication-system--deep-dive)
-- [Razorpay Payment Flow](#razorpay-payment-flow)
-- [Razorpay Webhook Handler](#razorpay-webhook-handler)
-- [Celery Async Task — Invoice Email](#celery-async-task--invoice-email)
-- [Order State Machine](#order-state-machine)
-- [Coupon & Discount Engine](#coupon--discount-engine)
-- [Inventory Management System](#inventory-management-system)
-- [Admin Panel](#admin-panel)
-- [Custom Exception Hierarchy](#custom-exception-hierarchy)
-- [API Endpoints Reference](#api-endpoints-reference)
-- [Data Models](#data-models)
-- [Local Setup (Docker)](#local-setup-docker)
-- [Environment Variables](#environment-variables)
-- [Tech Stack](#tech-stack)
-- [Roadmap](#roadmap)
+<table>
+<tr>
+<td width="50%">
 
----
+**🔐 Multi-Layer Security**
+- Argon2 password hashing with auto-rehash
+- JWT access + refresh tokens with rotation
+- Redis token blacklist (instant revocation)
+- Refresh token theft detection
+- Dual-layer rate limiting (IP + username)
+- Session invalidation on password change
 
-## Feature Overview
+</td>
+<td width="50%">
 
-### 🔐 Authentication & Security
-- JWT **access + refresh token** dual-token flow
-- **Refresh token rotation** — every `/refresh` call issues a new pair and blacklists the old refresh token
-- **Redis-backed token blacklist** — instant token revocation on logout and password reset
-- **Token theft detection** — blacklisted refresh tokens trigger a `401` with a compromise alert
-- **Dual-layer login rate limiting** — throttles by both IP *and* username to block proxy-distributed brute-force attacks
-- **Session invalidation on password reset** — `password_changed_at` timestamp invalidates all tokens issued before the reset
-- **UUID-based token subjects** — tokens carry `user.id` (UUID) instead of username for performance and privacy
-- **Argon2 password hashing** with automatic hash upgrade on login (`verify_and_update`)
-- **Email verification flow** — registration creates inactive accounts; a background-task email activates them
-- **Verification email cooldown** — 2-minute Redis-backed cooldown on resend requests to prevent spam
-- **Single-use password reset tokens** — blacklisted immediately after use; cannot be replayed
-- **Admin & role-based access control** — `require_roles()` dependency supports multi-role guards (e.g., `admin`, `manager`)
-- **Token type enforcement** — `access`, `refresh`, `email_verification`, and `password_reset` tokens are structurally distinct and validated on every request
+**💳 Live Payment Processing**
+- Razorpay order creation via `run_in_executor`
+- Gateway-first design (zero DB side effects on failure)
+- Cryptographic signature verification
+- Server-side webhook with HMAC-SHA256
+- Audit log written before business logic
+- Idempotent duplicate event handling
 
-### 👤 User Profile Management
-- `GET /api/v1/users/me` — fetch authenticated user's own profile
-- `PATCH /api/v1/users/me` — partial profile update (name, email, phone)
-- **Indian phone number validation** — auto-normalizes to `+91XXXXXXXXXX` format
-- **Row-level lock** on email update — race condition safe (`SELECT ... FOR UPDATE`)
-- **Email uniqueness re-check** on update — prevents stealing another user's email
-- `GET /api/v1/users/me/orders` — paginated personal order history with limit/offset
+</td>
+</tr>
+<tr>
+<td width="50%">
 
-### 🛡️ Admin Panel
-- **Full product management** — create, list (all incl. soft-deleted), partial update, soft-delete
-- **Platform-wide order management** — list all orders with optional `status` filter, paginated
-- **Order status transitions** — enforced via a strict state machine (`VALID_TRANSITIONS`), invalid transitions return a descriptive `400` with allowed next states
-- **Coupon management** — create, list (with filters), get by code, partial update, deactivate coupons
-- **Inventory management** — low-stock alerts, reorder alerts, stock summary report, stock adjustments, restocks, movement history, threshold configuration
-- All admin routes guarded by `require_roles("admin")` dependency
+**📦 Inventory Audit Trail**
+- Immutable `StockMovement` entries for every change
+- `before → after` snapshots on each operation
+- Atomic row-level stock guards (no oversell)
+- Low-stock alerts & reorder point monitoring
+- Admin restock, adjust, threshold management
 
-### 🎟️ Coupon & Discount Engine
-- **Two discount types** — `PERCENTAGE` (e.g. 20% off) and `FLAT` (e.g. ₹100 off)
-- **Max discount cap** — `max_discount_cap` field caps the maximum discount for percentage coupons (e.g. "20% off, max ₹200")
-- **Global usage limit** — `max_total_uses` cap per coupon; tracked via `total_used_count`
-- **Per-user usage limit** — `max_uses_per_user` field allows multi-use coupons per user (e.g. loyalty coupons)
-- **Per-user usage tracking** — `CouponUsage` table prevents overuse per user
-- **Minimum order value guard** — `min_order_value` field; coupon rejected if cart subtotal is below threshold
-- **Date range enforcement** — `valid_from` + `valid_until` datetime pair; both start and expiry are enforced
-- **Active flag** — admin can enable/disable coupons without deleting them
-- **Cart-level coupon application** — apply or remove a coupon before checkout via dedicated endpoints
-- **Atomic usage increment** — `total_used_count` updated in the same transaction as order creation
-- **Checkout integration** — coupon discount stored on the `Order` for audit trail
-- **Case-insensitive code lookup** — coupon codes stored and matched uppercase-normalized
-- **Admin CRUD** — full create/list/get/update/deactivate via `/api/v1/admin/coupons`
+</td>
+<td width="50%">
 
-### 📦 Inventory Management System *(New)*
-- **Stock Movement audit log** — every stock change (sale, return, restock, adjustment) recorded as an immutable `StockMovement` entry
-- **Four movement types** — `SALE`, `RETURN`, `RESTOCK`, `ADJUSTMENT`
-- **Movement metadata** — each movement stores `quantity_before`, `quantity_after`, `quantity_changed`, `reference_id` (e.g. order ID), `reason`, and `performed_by` (admin user)
-- **Negative stock guard** — `NegativeStockError` raised if any operation would reduce stock below zero
-- **Low-stock threshold** — `low_stock_threshold` field on `Product`; admin can query all products below this threshold
-- **Reorder point** — `reorder_point` field on `Product`; separate alert query for products at or below reorder level
-- **Stock summary report** — single endpoint returns `total_active_products`, `out_of_stock_count`, `low_stock_count`, `reorder_alert_count`, and the low-stock product list
-- **Admin stock adjustment** — arbitrary positive/negative `quantity_delta` with mandatory reason (min 10 chars); recorded as `ADJUSTMENT` movement
-- **Admin restock** — positive-only `quantity_to_add`; recorded as `RESTOCK` movement
-- **Per-product movement history** — filterable by `movement_type`, `start_date`, `end_date`, paginated
-- **Threshold configuration** — admin can update `low_stock_threshold` and `reorder_point` per product without touching stock quantity
-- All inventory routes under `/api/v1/admin/inventory`, guarded by `require_roles("admin")`
+**🎟️ Coupon & Discount Engine**
+- Percentage & flat discounts with cap support
+- Per-user + global usage limits
+- Date-range validity with timezone awareness
+- Race-condition protection via `SELECT ... FOR UPDATE`
+- Full rollback on order cancellation
 
-### 🛍️ Catalog
-- Category management with **self-referential parent/child hierarchy** (slug-indexed)
-- Product CRUD with **soft delete** — deleted products hidden from listings but retained for order history integrity
-- JSONB `attributes` field for flexible, schema-less product metadata
-- `low_stock_threshold` and `reorder_point` fields on Product for inventory management
-- Pagination support on product listings
+</td>
+</tr>
+<tr>
+<td width="50%">
 
-### 🛒 Cart
-- Auto-created cart on first access — no explicit cart creation step required
-- **Ghost product cleanup** — soft-deleted products are silently removed from carts on fetch
-- Real-time **stock validation** on add and update
-- **Quantity decrement shortcut** — decrements by 1, auto-removes item at zero
-- ORM-level `total_price` property computed from relationships
-- `UniqueConstraint(cart_id, product_id)` — duplicate adds merge quantities
-- **Coupon pre-attachment** — coupon can be applied to cart before checkout via `/api/v1/coupons/cart/apply-coupon`
+**⚙️ Async Task Queue**
+- Celery workers with Redis broker
+- HTML invoice emails (styled, auto-retry ×3)
+- Email failures never roll back payments
+- Decoupled from the payment commit path
 
-### 📦 Orders & Checkout
-- **Razorpay-first checkout** — Razorpay order ID created *before* any DB write, eliminating stock-leak on gateway failure
-- **Cart → Order conversion** in a single atomic DB transaction after Razorpay confirms
-- **18% GST** on subtotal; ₹50 flat shipping waived for orders above ₹500
-- **Coupon discount** applied after GST and before shipping calculation
-- **Minimum order guard** — rejects checkout below ₹1 (Razorpay minimum in paise)
-- **Atomic stock decrement** — concurrent over-purchase blocked at DB level with rowcount check
-- `price_at_purchase` + `product_name` snapshot on each `OrderItem` — historically accurate even after price/name changes
-- **Address snapshot** saved on order — correct shipping record even if user later deletes the address
-- `OrderStatus` state machine: `pending → paid → processing → shipped → delivered / cancelled`
+</td>
+<td width="50%">
 
-### ❌ Order Cancellation
-- Users can cancel their own orders in `PENDING`, `PAID`, or `PROCESSING` states
-- **Atomic stock rollback** — stock quantity restored via a direct DB `UPDATE` (not in-memory) for each cancelled item
-- **Coupon usage rollback** — `total_used_count` decremented and `CouponUsage` record deleted when a coupon-applied order is cancelled
-- **Guard rails** — `SHIPPED` and `DELIVERED` orders cannot be cancelled; returns descriptive `400`
-- Full rollback on any exception — no partial state left in DB
+**🏗️ Clean Architecture**
+- Service-layer pattern (thin routes, fat services)
+- 20+ domain-specific exceptions
+- 6 global error handlers (zero raw exceptions)
+- Pydantic v2 schemas for all I/O
+- Alembic migrations, Docker-first setup
 
-### 💳 Razorpay Payment Integration
-- **Live Razorpay SDK** with `asyncio.get_running_loop() + run_in_executor` for non-blocking calls
-- Checkout response returns `razorpay_order_id`, `amount`, `currency`, and `key` — ready for frontend SDK
-- **Cryptographic signature verification** via `client.utility.verify_payment_signature`
-- **Authorization check on verification** — users can only verify their own transactions
-- **Race condition protection** — already-`SUCCESS` transactions are short-circuited
-- On verified payment: `Transaction.status → SUCCESS`, `Order.status → PAID` updated atomically
-- On failed signature: `Transaction.status → FAILED` is recorded; fraud attempt logged with warning
-
-### 🔔 Razorpay Webhook Handler
-- **Complete server-side payment confirmation** via `POST /api/v1/webhooks/razorpay`
-- **Immediate audit logging** — every incoming event is persisted to `webhook_events` table *before* any business logic runs, ensuring no event is ever lost
-- **HMAC-SHA256 signature verification** — raw request body hashed with `RAZORPAY_WEBHOOK_SECRET`; invalid signatures raise an exception and are logged
-- **Idempotency guard** — duplicate `payment.captured` events for an already-`SUCCESS` transaction are short-circuited safely
-- **`payment.captured` event handling** — atomically updates `Transaction.status → SUCCESS` and `Order.status → PAID` in a single commit
-- **`order.paid` event** — recognized and extensible for future handling
-- **Isolation from email failures** — invoice email is queued via Celery *after* the DB commit; email queue failures log a warning but never roll back a completed payment
-- Always returns `200 OK` to Razorpay even on business-logic errors (`error_logged` status) to prevent unnecessary retries from the gateway
-
-### ⚙️ Celery Async Task — Invoice Email
-- **HTML invoice email** dispatched as a Celery background task after every confirmed payment (both via `/verify-payment` and webhook)
-- Email renders: Order ID, User ID, total amount paid, and applied coupon discount (if any)
-- **Auto-retry on failure** — Celery retries up to 3 times with a 60-second countdown on SMTP or network errors
-- Fully decoupled from the payment commit — email failures never affect payment status
-- Celery broker and result backend both backed by the existing authenticated Redis instance
-
-### 📍 Address Book
-- Full CRUD with **soft delete** — addresses used in past orders are never hard-deleted
-- `AddressType` enum — `home`, `office`, `other` (enforced at DB level via `SQLEnum`)
-- **Auto-default** — first address added is automatically set as default
-- **Atomic default switching** — race-condition safe; only one address can be default at a time
-- User-scoped queries — users cannot access or modify each other's addresses
-
-### 🏗️ Custom Exception Hierarchy *(New)*
-- **Structured `AppException` base** — every custom error inherits from it; HTTP status code and error code are co-located with the exception class
-- **Domain-specific exception types** — auth, orders, payments, coupons, inventory, and more (see [Custom Exception Hierarchy](#custom-exception-hierarchy))
-- **Global error handlers** — `error_handlers.py` registers FastAPI exception handlers for `AppException`, `RequestValidationError`, `SQLAlchemyError`, `IntegrityError`, and `RedisError`; generic `Exception` handler acts as safety net
-
-### ⚙️ Developer Experience
-- **Modular model architecture** — models split across `user`, `product`, `cart`, `order`, `address`, `transaction`, `coupon`, `inventory`, `webhook_event`
-- **Service layer pattern** — all business logic in `app/services/`, routes stay thin
-- **Validators module** — `app/validators/` layer with reusable validators for coupons, addresses, orders, and users
-- **Async SQLAlchemy** with `asyncpg` driver throughout
-- **Alembic** migration support for modular schema evolution
-- **System-wide structured logging** via `logging_config.py`
-- **Celery** worker infrastructure with active async task support (invoice email delivery)
-- **Schemathesis** + **pytest** in dependencies for API contract testing
+</td>
+</tr>
+</table>
 
 ---
 
-## Architecture & Project Structure
+## 🏛 Architecture
 
-```text
+```mermaid
+graph TB
+    subgraph Client
+        FE["🖥️ Frontend / API Consumer"]
+    end
+
+    subgraph FastAPI["⚡ FastAPI Application"]
+        direction TB
+        R1["Auth Router"]
+        R2["Orders Router"]
+        R3["Admin Router"]
+        R4["Webhook Router"]
+        R5["Cart · Products · Coupons"]
+        
+        SL["Service Layer<br/><i>auth · order · coupon · inventory · webhook · cart</i>"]
+        
+        ORM["Async SQLAlchemy + asyncpg"]
+    end
+
+    subgraph Data["💾 Data Layer"]
+        PG[("PostgreSQL 15<br/>Primary Database")]
+        RD[("Redis Alpine<br/>Blacklist · Rate Limit · Broker")]
+    end
+
+    subgraph Workers["👷 Background"]
+        CW["Celery Worker<br/>Invoice Emails · SMTP"]
+    end
+
+    subgraph External["🌐 External"]
+        RZP["Razorpay Gateway<br/>Orders · Payments · Webhooks"]
+    end
+
+    FE -->|"REST / HTTP"| R1 & R2 & R3 & R5
+    RZP -->|"Webhook POST"| R4
+    R1 & R2 & R3 & R4 & R5 --> SL
+    SL --> ORM
+    ORM --> PG
+    SL -->|"Blacklist · Rate Limit"| RD
+    SL -->|"Order Create · Verify"| RZP
+    SL -->|"task.delay()"| CW
+    CW -->|"Broker + Backend"| RD
+
+    style FastAPI fill:#1a1a2e,stroke:#00BFA6,stroke-width:2px,color:#fff
+    style Data fill:#16213e,stroke:#6C63FF,stroke-width:2px,color:#fff
+    style Workers fill:#0f3460,stroke:#FFA726,stroke-width:2px,color:#fff
+    style External fill:#1a1a2e,stroke:#FF6B6B,stroke-width:2px,color:#fff
+    style Client fill:#1a1a2e,stroke:#00BFA6,stroke-width:2px,color:#fff
+```
+
+---
+
+## 🔄 Deep Dives
+
+### 🔐 Authentication Flow
+
+> **5-step validation chain** on every protected request — from Redis blacklist check to session invalidation detection.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as FastAPI
+    participant RD as Redis
+    participant DB as PostgreSQL
+
+    Note over C,DB: 📝 Registration
+    C->>API: POST /auth/register
+    API->>API: Validate email uniqueness (case-insensitive)
+    API->>API: Hash password (Argon2)
+    API->>DB: Create User (is_active = false)
+    API->>C: Dispatch verification email (BackgroundTask)
+    
+    Note over C,DB: ✅ Email Verification
+    C->>API: GET /auth/verify?token=<token>
+    API->>API: Validate token type = "email_verification"
+    API->>DB: Set is_active = true
+    API->>RD: Blacklist token (single-use)
+    API->>C: 200 OK — Account activated
+
+    Note over C,DB: 🔑 Login
+    C->>API: POST /auth/login
+    API->>RD: Rate limit check — IP (5/60s)
+    API->>RD: Rate limit check — Username (5/60s)
+    API->>DB: Fetch user, Argon2 verify_and_update
+    API->>API: Reject if is_active = false → 403
+    API->>C: { access_token (30min), refresh_token (7d) }
+
+    Note over C,DB: 🛡️ Protected Request — 5-Step Chain
+    C->>API: GET /api/v1/users/me [Bearer token]
+    API->>RD: ① Blacklist check → reject revoked tokens
+    API->>API: ② JWT decode + claims (type=access, UUID sub, exp)
+    API->>DB: ③ User lookup by UUID
+    API->>API: ④ Session check: iat ≥ password_changed_at?
+    API->>API: ⑤ is_active check
+    API->>C: 200 — User profile
+```
+
+<details>
+<summary><b>🔄 Token Lifecycle — Refresh, Logout & Theft Detection</b></summary>
+
+```mermaid
+flowchart LR
+    subgraph Refresh["POST /auth/refresh"]
+        R1["Receive refresh token"] --> R2{"Blacklisted?"}
+        R2 -- "Yes" --> R3["🚨 401 — Token compromised<br/><i>Theft detection triggered</i>"]
+        R2 -- "No" --> R4["Blacklist old pair"]
+        R4 --> R5["Issue new access + refresh"]
+    end
+
+    subgraph Logout["POST /auth/logout"]
+        L1["Receive access token"] --> L2["Blacklist with remaining TTL"]
+        L2 --> L3["✅ Token revoked"]
+    end
+
+    subgraph Reset["POST /auth/reset-password"]
+        P1["New password"] --> P2["Re-hash (Argon2)"]
+        P2 --> P3["Set password_changed_at = now()"]
+        P3 --> P4["⚡ ALL active sessions invalidated"]
+        P4 --> P5["Blacklist reset token (single-use)"]
+    end
+
+    style Refresh fill:#1a1a2e,stroke:#00BFA6,color:#fff
+    style Logout fill:#1a1a2e,stroke:#6C63FF,color:#fff
+    style Reset fill:#1a1a2e,stroke:#FF6B6B,color:#fff
+```
+
+</details>
+
+---
+
+### 💳 Payment & Checkout Flow
+
+> **Design principle:** Razorpay order is created *before* any database writes. A gateway failure leaves zero side effects.
+
+```mermaid
+flowchart TD
+    A["POST /orders/checkout"] --> B["Validate cart & shipping address"]
+    B --> C{"Coupon attached?"}
+    C -- "Yes" --> D["Validate coupon<br/><i>active · date range · usage limits · min order</i>"]
+    D --> E["Calculate discount<br/><i>% with cap or flat amount</i>"]
+    C -- "No" --> F["Skip coupon"]
+    E --> F
+    
+    F --> G["💰 Price Computation<br/><code>subtotal + 18% GST − discount + ₹50 shipping</code><br/><i>Shipping waived above ₹500</i>"]
+    G --> H{"amount ≥ ₹1?"}
+    H -- "No" --> I["❌ MinimumOrderError"]
+    H -- "Yes" --> J
+
+    subgraph RZP["☁️ Razorpay First — No DB Writes Yet"]
+        J["client.order.create()<br/><i>via run_in_executor (non-blocking)</i>"]
+    end
+
+    J -- "Gateway fails" --> K["❌ Zero DB side effects"]
+    J -- "Success" --> L
+
+    subgraph TX["🔒 Single Atomic DB Transaction"]
+        L["Create Order<br/><i>with coupon_discount for audit</i>"]
+        L --> M["Atomic stock decrement per item<br/><i>rowcount-checked — no oversell</i>"]
+        M --> N["Create OrderItems<br/><i>price_at_purchase + name snapshot</i>"]
+        N --> O["Record StockMovement (SALE)"]
+        O --> P["Increment coupon.total_used_count"]
+        P --> Q["Insert CouponUsage record"]
+        Q --> R["Clear cart"]
+        R --> S["Create Transaction (PENDING)"]
+        S --> T["db.commit()"]
+    end
+
+    T --> U["✅ Return razorpay_order_id + key"]
+
+    style RZP fill:#0f3460,stroke:#FF6B6B,stroke-width:2px,color:#fff
+    style TX fill:#1a1a2e,stroke:#00BFA6,stroke-width:2px,color:#fff
+```
+
+<details>
+<summary><b>✅ Payment Verification (Client-Side Confirmation)</b></summary>
+
+```mermaid
+flowchart TD
+    A["POST /orders/verify-payment"] --> B["Authorization: user owns this transaction?"]
+    B --> C{"Already SUCCESS?"}
+    C -- "Yes" --> D["✅ Short-circuit — idempotent"]
+    C -- "No" --> E["Razorpay cryptographic signature verification"]
+    E -- "Valid ✅" --> F["transaction.status = SUCCESS<br/>order.status = PAID"]
+    E -- "Invalid ❌" --> G["transaction.status = FAILED<br/>🚨 Fraud attempt logged"]
+    F --> H["After commit → queue Celery invoice email"]
+
+    style A fill:#1a1a2e,stroke:#00BFA6,color:#fff
+```
+
+</details>
+
+---
+
+### 📬 Webhook Handler
+
+> **Reliability-first:** audit log persisted *before* any business logic. Idempotent on duplicates. Email failures never affect payment state.
+
+```mermaid
+flowchart TD
+    A["POST /webhooks/razorpay<br/><i>Public — secured by HMAC only</i>"] --> B
+
+    subgraph S1["Step 1 · Audit Log First"]
+        B["Write WebhookEvent to DB<br/><i>persisted even if everything else fails</i>"]
+    end
+
+    B --> C
+
+    subgraph S2["Step 2 · Signature Verification"]
+        C["HMAC-SHA256(raw_body, secret)<br/><i>hmac.compare_digest — timing-attack safe</i>"]
+    end
+
+    C -- "Invalid" --> D["⚠️ Log + return 200<br/><i>Prevent Razorpay retry storm</i>"]
+    C -- "Valid" --> E
+
+    subgraph S3["Step 3 · Event Routing"]
+        E{"event type?"}
+        E -- "payment.captured" --> F["handle_payment_success()"]
+        E -- "order.paid" --> G["Recognized — extensible"]
+        E -- "other" --> H["Logged as ignored"]
+    end
+
+    subgraph S4["Step 4 · Payment Success"]
+        F --> I{"Already SUCCESS?"}
+        I -- "Yes" --> J["✅ Idempotent no-op"]
+        I -- "No" --> K["Atomic update:<br/>transaction → SUCCESS<br/>order → PAID"]
+        K --> L["Queue Celery invoice email"]
+    end
+
+    L --> M["Step 5 · Mark webhook processed → return 200"]
+
+    style S1 fill:#16213e,stroke:#FFA726,stroke-width:2px,color:#fff
+    style S2 fill:#16213e,stroke:#FF6B6B,stroke-width:2px,color:#fff
+    style S3 fill:#16213e,stroke:#6C63FF,stroke-width:2px,color:#fff
+    style S4 fill:#16213e,stroke:#00BFA6,stroke-width:2px,color:#fff
+```
+
+---
+
+### 📦 Order Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING
+    
+    PENDING --> PAID : Payment verified
+    PENDING --> CANCELLED : User/Admin cancel
+    
+    PAID --> PROCESSING : Admin action
+    PAID --> CANCELLED : User/Admin cancel
+    
+    PROCESSING --> SHIPPED : Admin action
+    PROCESSING --> CANCELLED : User/Admin cancel
+    
+    SHIPPED --> DELIVERED : Admin action
+    
+    note right of CANCELLED
+        Terminal state.
+        Triggers: stock rollback + coupon rollback
+    end note
+    
+    note right of DELIVERED
+        Terminal state.
+        No further transitions.
+    end note
+```
+
+<details>
+<summary><b>♻️ Cancellation — What Gets Rolled Back</b></summary>
+
+```mermaid
+flowchart LR
+    A["PATCH /orders/{id}/cancel"] --> B{"Status?"}
+    B -- "SHIPPED / DELIVERED" --> C["❌ 400 — Cannot cancel"]
+    B -- "PENDING / PAID / PROCESSING" --> D["Atomic stock rollback<br/><i>DB UPDATE per item</i>"]
+    D --> E["Record StockMovement (RETURN)"]
+    E --> F["coupon.total_used_count -= 1"]
+    F --> G["Delete CouponUsage record"]
+    G --> H["order.status = CANCELLED"]
+    H --> I["✅ Full rollback on any exception"]
+
+    style A fill:#1a1a2e,stroke:#FF6B6B,color:#fff
+```
+
+</details>
+
+---
+
+### 🎟️ Coupon Engine
+
+> **7-step validation** with race-condition protection at checkout using `SELECT ... FOR UPDATE`.
+
+```mermaid
+flowchart TD
+    A["User applies coupon"] --> B["Normalize code → UPPERCASE"]
+    B --> C["① Lookup by code"]
+    C --> D["② is_active check"]
+    D --> E["③ Date range: valid_from ≤ now ≤ valid_until"]
+    E --> F["④ Global usage: total_used < max_total_uses"]
+    F --> G["⑤ Per-user usage: user_count < max_per_user"]
+    G --> H["⑥ Min order value: subtotal ≥ min_order_value"]
+    H --> I["⑦ Discount calculation"]
+    
+    I --> J{"Type?"}
+    J -- "PERCENTAGE" --> K["subtotal × (value/100)<br/>capped at max_discount_cap"]
+    J -- "FLAT" --> L["flat_value<br/>capped at subtotal"]
+    K --> M["✅ Applied to cart"]
+    L --> M
+
+    style A fill:#1a1a2e,stroke:#FFA726,color:#fff
+```
+
+<details>
+<summary><b>🔄 Coupon Lifecycle — Apply → Checkout → Cancellation Rollback</b></summary>
+
+```mermaid
+flowchart LR
+    subgraph Cart["🛒 Cart Phase"]
+        A1["Apply coupon"] --> A2["Discount preview stored on cart"]
+    end
+
+    subgraph Checkout["💳 Checkout Phase"]
+        B1["Re-validate under FOR UPDATE lock<br/><i>Race-condition safe</i>"]
+        B1 --> B2["coupon.total_used_count += 1"]
+        B2 --> B3["Insert CouponUsage record"]
+        B3 --> B4["Snapshot discount on order"]
+    end
+
+    subgraph Cancel["❌ Cancellation Rollback"]
+        C1["coupon.total_used_count -= 1"]
+        C1 --> C2["Delete CouponUsage record"]
+        C2 --> C3["discount preserved on order<br/><i>for historical record</i>"]
+    end
+
+    Cart --> Checkout --> Cancel
+
+    style Cart fill:#16213e,stroke:#00BFA6,color:#fff
+    style Checkout fill:#16213e,stroke:#6C63FF,color:#fff
+    style Cancel fill:#16213e,stroke:#FF6B6B,color:#fff
+```
+
+</details>
+
+---
+
+### 📊 Inventory System
+
+> Every stock change — sale, cancellation, restock, or admin adjustment — is recorded as an **immutable `StockMovement` entry** with `before → after` snapshots.
+
+```mermaid
+flowchart LR
+    subgraph Triggers["Trigger Events"]
+        T1["🛒 Checkout<br/>→ SALE"]
+        T2["❌ Cancellation<br/>→ RETURN"]
+        T3["📥 Admin Restock<br/>→ RESTOCK"]
+        T4["⚙️ Admin Adjust<br/>→ ADJUSTMENT"]
+    end
+
+    subgraph Record["StockMovement Record"]
+        R["product_id<br/>movement_type<br/>quantity_changed (signed ±)<br/>quantity_before → quantity_after<br/>reference_id (order UUID)<br/>reason (mandatory for ADJUSTMENT)<br/>performed_by (admin FK)<br/>created_at (immutable)"]
+    end
+
+    T1 & T2 & T3 & T4 --> Record
+
+    style Triggers fill:#16213e,stroke:#FFA726,stroke-width:2px,color:#fff
+    style Record fill:#1a1a2e,stroke:#00BFA6,stroke-width:2px,color:#fff
+```
+
+---
+
+### ⚙️ Celery Invoice Email Pipeline
+
+```mermaid
+flowchart LR
+    A["Payment confirmed<br/><i>webhook or /verify-payment</i>"] --> B["send_invoice_email.delay()"]
+    B --> C["Redis Broker"]
+    C --> D["Celery Worker"]
+    D --> E["Build styled HTML email"]
+    E --> F["SMTP send<br/><i>optional STARTTLS</i>"]
+    F -- "Success" --> G["✅ Invoice delivered"]
+    F -- "Failure" --> H["🔄 Retry (max 3, 60s interval)"]
+    H --> F
+
+    style A fill:#1a1a2e,stroke:#00BFA6,color:#fff
+    style D fill:#0f3460,stroke:#FFA726,color:#fff
+```
+
+> **Key guarantee:** Email failures are logged as warnings — the payment DB state is **never** rolled back.
+
+---
+
+### 🚨 Exception Architecture
+
+```mermaid
+flowchart TD
+    EX["Exception (Python)"]
+    EX --> AE["AppException (Base)<br/><i>status_code · error_code · message</i>"]
+    
+    AE --> BR["BadRequestError (400)"]
+    AE --> UA["UnauthorizedError (401)"]
+    AE --> FB["ForbiddenError (403)"]
+    AE --> NF["NotFoundError (404)"]
+    AE --> CF["ConflictError (409)"]
+    AE --> RL["RateLimitError (429)"]
+    AE --> SU["ServiceUnavailableError (503)"]
+
+    BR --> BR1["CartEmptyError"]
+    BR --> BR2["InsufficientStockError"]
+    BR --> BR3["PaymentVerificationError"]
+    BR --> BR4["OrderCancellationError"]
+    BR --> BR5["CouponExpiredError"]
+    BR --> BR6["NegativeStockError"]
+    
+    UA --> UA1["AuthenticationError"]
+    UA --> UA2["TokenCompromisedError"]
+    UA --> UA3["SessionInvalidatedError"]
+    
+    NF --> NF1["CouponNotFoundError"]
+    
+    CF --> CF1["EmailAlreadyExistsError"]
+    CF --> CF2["UsernameAlreadyExistsError"]
+    
+    SU --> SU1["PaymentGatewayError"]
+    SU --> SU2["DatabaseError"]
+
+    style AE fill:#16213e,stroke:#00BFA6,stroke-width:2px,color:#fff
+    style BR fill:#1a1a2e,stroke:#FF6B6B,color:#fff
+    style UA fill:#1a1a2e,stroke:#FFA726,color:#fff
+    style FB fill:#1a1a2e,stroke:#6C63FF,color:#fff
+    style NF fill:#1a1a2e,stroke:#6C63FF,color:#fff
+    style CF fill:#1a1a2e,stroke:#6C63FF,color:#fff
+    style RL fill:#1a1a2e,stroke:#FFA726,color:#fff
+    style SU fill:#1a1a2e,stroke:#FF6B6B,color:#fff
+```
+
+6 global handlers catch everything — **no raw exceptions reach the client:**
+
+| Handler | Catches | Response |
+|:---|:---|:---|
+| `app_exception_handler` | All `AppException` subclasses | `{ error_code, message, path }` |
+| `validation_exception_handler` | Pydantic `RequestValidationError` | `422` + field-level details |
+| `integrity_error_handler` | SQLAlchemy `IntegrityError` | `409` — duplicate/constraint |
+| `sqlalchemy_exception_handler` | SQLAlchemy `SQLAlchemyError` | `500` — generic DB error |
+| `redis_exception_handler` | `RedisError` | `503` — cache unavailable |
+| `generic_exception_handler` | `Exception` (safety net) | `500` — unhandled fallback |
+
+---
+
+## 📁 Project Structure
+
+```
 E-Commerce/
-├── alembic/                          # Database migration scripts
-│   ├── versions/
-│   ├── env.py
-│   └── archived/
 ├── app/
+│   ├── main.py                         # App entry + router registration + error handlers
 │   ├── api/
-│   │   ├── dependencies.py           # get_current_user, require_roles, auth guards
+│   │   ├── dependencies.py             # get_current_user, require_roles, token chain
 │   │   └── v1/
-│   │       ├── auth.py               # All auth endpoints
-│   │       ├── products.py           # Catalog & category endpoints
-│   │       ├── cart.py               # Cart management endpoints
-│   │       ├── order.py              # Checkout, verify-payment, cancel, order history
-│   │       ├── address.py            # Address book endpoints
-│   │       ├── users.py              # User profile & personal order history
-│   │       ├── admin.py              # Admin panel — products & orders
-│   │       ├── coupon.py             # Coupon endpoints (user cart-level + admin CRUD)   ← Updated
-│   │       ├── inventory.py          # Inventory management endpoints (admin)             ← New
-│   │       └── webhooks.py           # Razorpay webhook receiver
+│   │       ├── auth.py                 # Register, login, refresh, verify, reset
+│   │       ├── products.py             # Catalog CRUD & categories
+│   │       ├── cart.py                 # Cart management (add, update, remove)
+│   │       ├── order.py                # Checkout, verify-payment, cancel
+│   │       ├── address.py              # Address book with soft-delete
+│   │       ├── users.py                # User profile & order history
+│   │       ├── admin.py                # Admin — products, orders, state machine
+│   │       ├── coupon.py               # Coupon apply/remove + admin CRUD
+│   │       ├── inventory.py            # Inventory admin (restock, adjust, alerts)
+│   │       └── webhooks.py             # Razorpay webhook receiver
 │   ├── core/
-│   │   ├── config.py                 # Pydantic settings (env-driven, incl. Razorpay + Webhook)
-│   │   ├── redis.py                  # Redis client + rate limiting logic
-│   │   ├── security.py               # JWT creation, blacklist, Argon2 hashing
-│   │   ├── exceptions.py             # Custom exception hierarchy (AppException + all subtypes) ← New
-│   │   ├── error_handlers.py         # Global FastAPI exception handlers                        ← New
-│   │   └── logging_config.py         # Structured logging setup
+│   │   ├── config.py                   # Pydantic settings (env-driven)
+│   │   ├── security.py                 # JWT (access, refresh, reset, verify tokens)
+│   │   ├── redis.py                    # Rate limiting utility
+│   │   ├── exceptions.py               # 20+ domain exception classes
+│   │   ├── error_handlers.py           # 6 global exception handlers
+│   │   └── logging_config.py           # Structured logging
 │   ├── db/
-│   │   ├── models/
-│   │   │   ├── user.py               # User model
-│   │   │   ├── product.py            # Product (+ low_stock_threshold, reorder_point), Category
-│   │   │   ├── cart.py               # Cart, CartItem
-│   │   │   ├── order.py              # Order, OrderItem, OrderStatus enum
-│   │   │   ├── address.py            # Address, AddressType enum
-│   │   │   ├── transaction.py        # Razorpay Transaction
-│   │   │   ├── coupon.py             # Coupon (+ max_discount_cap, max_uses_per_user, valid_from), CouponUsage
-│   │   │   ├── inventory.py          # StockMovement, StockMovementType enum    ← New
-│   │   │   └── webhook_event.py      # WebhookEvent audit log
-│   │   ├── base.py
-│   │   ├── base_class.py
-│   │   └── session.py                # Async session factory + get_db
-│   ├── schemas/
-│   │   ├── user.py                   # UserOut, UserUpdate (phone validator)
-│   │   ├── product.py                # ProductCreate, ProductUpdate, ProductResponse
-│   │   ├── cart.py
-│   │   ├── order.py                  # OrderOut, CheckoutRequest, PaymentVerifyRequest, OrderStatusUpdate
-│   │   ├── coupon.py                 # CouponCreate, CouponUpdate, CouponResponse, ApplyCouponRequest/Response, CouponAdminListResponse
-│   │   ├── inventory.py              # StockMovementResponse, AdminAdjustRequest, AdminRestockRequest, LowStockProductResponse, StockSummaryReport, ProductThresholdUpdate ← New
-│   │   └── address.py
+│   │   ├── session.py                  # Async session factory
+│   │   └── models/
+│   │       ├── user.py                 # User + password_changed_at
+│   │       ├── product.py              # Product + stock + thresholds
+│   │       ├── cart.py                 # Cart + CartItem + subtotal
+│   │       ├── order.py                # Order + OrderItem + status enum
+│   │       ├── transaction.py          # Razorpay transaction record
+│   │       ├── address.py              # Shipping address + soft-delete
+│   │       ├── coupon.py               # Coupon + CouponUsage + DiscountType
+│   │       ├── inventory.py            # StockMovement + StockMovementType
+│   │       └── webhook_event.py        # Webhook audit log
+│   ├── schemas/                        # Pydantic v2 request/response models
 │   ├── services/
-│   │   ├── cart_service.py           # CartService (full cart lifecycle)
-│   │   ├── order_service.py          # checkout, verify_payment, cancel, admin order fns
-│   │   ├── coupon_service.py         # validate, apply, remove, rollback, admin CRUD
-│   │   ├── inventory_service.py      # record_stock_movement, low-stock, reorder alerts, adjust, restock, thresholds ← New
-│   │   ├── product_service.py        # ProductService (CRUD, soft delete, admin list)
-│   │   ├── category_service.py       # CatalogService
-│   │   ├── address_service.py        # AddressService (default, soft delete)
-│   │   ├── user_service.py           # update_user_profile (with row lock)
-│   │   ├── webhook_service.py        # RazorpayWebhookService (verify + handle)
-│   │   └── utils.py
-│   ├── validators/                   # Reusable field-level validators             ← New
-│   │   ├── __init__.py               # Re-exports all validators
-│   │   ├── coupon.py                 # normalize_coupon_code, validate_discount_value, validate_discount_cap, validate_coupon_dates
-│   │   ├── address.py
-│   │   ├── order.py
-│   │   └── user.py
+│   │   ├── order_service.py            # Checkout, verify, cancel, state machine
+│   │   ├── coupon_service.py           # Validate, apply, use-in-checkout, rollback
+│   │   ├── inventory_service.py        # Stock movements, adjust, restock, alerts
+│   │   ├── webhook_service.py          # HMAC verify, event routing, idempotency
+│   │   └── ...                         # Auth, cart, product services
+│   ├── validators/                     # Reusable field-level validators
 │   ├── utils/
-│   │   └── email.py                  # FastAPI-Mail background email sender
-│   ├── worker/
-│   │   ├── celery_app.py             # Celery app instance (Redis broker + backend)
-│   │   └── tasks.py                  # send_invoice_email Celery task
-│   └── main.py                       # FastAPI app, all router registrations
-├── docker-compose.yml
+│   │   └── email.py                    # FastAPI-Mail background sender
+│   └── worker/
+│       ├── celery_app.py               # Celery instance (Redis broker + backend)
+│       └── tasks.py                    # send_invoice_email (HTML, retry ×3)
+├── alembic/                            # Database migration scripts
+├── backend/
+│   └── docker-compose.yml              # PostgreSQL + Redis + API + Celery
 ├── Dockerfile
-├── pytest.ini
 ├── requirements.txt
-├── STOCK_RESERVATION_FEATURE.md
-└── alembic.ini
+└── pytest.ini
 ```
 
 ---
 
-## Authentication System — Deep Dive
+## 🔗 API Reference
 
-### Registration & Email Verification
-
-```
-POST /auth/register
-  → Validates email uniqueness (case-insensitive)
-  → Hashes password with Argon2
-  → Creates User with is_active=False
-  → Dispatches verification email via BackgroundTask
-
-GET /auth/verify?token=<token>
-  → Validates type == "email_verification"
-  → Sets user.is_active = True
-  → Blacklists token (single-use)
-
-POST /auth/resend-verification
-  → Generic response (no email enumeration)
-  → 2-minute Redis cooldown per email
-```
-
-### Login & Token Issuance
-
-```
-POST /auth/login
-  → Rate limit #1: IP-based        (5 attempts / 60s)
-  → Rate limit #2: Username-based  (5 attempts / 60s)  ← blocks distributed attacks
-  → Argon2 verify_and_update (re-hashes on algo upgrade)
-  → Blocks login if is_active == False → 403
-  → Returns: access_token (30min) + refresh_token (7d)
-```
-
-### Token Validation Chain (every protected route)
-
-```
-1. Redis blacklist check          → reject revoked tokens instantly
-2. JWT decode + claims validation → type=access, UUID sub, exp in future
-3. User lookup by UUID            → no username index scan
-4. Session invalidation check     → token.iat < user.password_changed_at → reject
-5. is_active check                → reject unverified / disabled accounts
-```
-
-### Token Refresh, Logout & Password Reset
-
-```
-POST /auth/refresh
-  → Blacklisted refresh token → 401 "Token compromised" (theft detection)
-  → Blacklists old token, issues new pair (full rotation)
-
-POST /auth/logout
-  → Blacklists access token with exact remaining TTL
-
-POST /auth/reset-password
-  → Validates token type + email match
-  → Re-hashes password (Argon2)
-  → Sets password_changed_at = now() → invalidates ALL active sessions globally
-  → Blacklists reset token (single-use)
-```
-
-### Role-Based Access Control
-
-```python
-Depends(require_roles("admin"))              # Admin only
-Depends(require_roles("admin", "manager"))   # Admin OR Manager
-```
-
----
-
-## Razorpay Payment Flow
-
-```
-POST /api/v1/orders/checkout
-  ├── Validate cart is non-empty
-  ├── Validate shipping address (user-owned, not deleted)
-  ├── Validate & apply coupon (if coupon attached to cart)
-  │   → Check valid_from <= now <= valid_until
-  │   → Check is_active, max_total_uses, max_uses_per_user
-  │   → Check min_order_value
-  │   → Apply max_discount_cap for percentage coupons
-  ├── Compute: subtotal + 18% GST − coupon_discount + ₹50 shipping (waived above ₹500)
-  ├── Guard: amount must be ≥ ₹1 (100 paise)
-  ├── ── RAZORPAY FIRST (no DB writes yet) ──────────────────────────
-  │   → client.order.create() via run_in_executor (non-blocking)
-  │   → Razorpay fails? → Zero DB side effects
-  ├── ── DB WRITES (only after Razorpay order ID received) ──────────
-  │   → Create Order record (coupon_discount stored)
-  │   → Atomic stock decrement per item (rowcount-checked)
-  │   → Create OrderItem with price_at_purchase + product_name snapshot
-  │   → Increment coupon.total_used_count (same transaction)
-  │   → Create CouponUsage record (same transaction)
-  │   → Clear Cart
-  │   → Create Transaction (PENDING, razorpay_order_id saved)
-  │   → Single db.commit()
-  └── Response: { order, payment_details: { razorpay_order_id, amount, currency, key } }
-```
-
----
-
-## Razorpay Webhook Handler
-
-```
-POST /api/v1/webhooks/razorpay
-  (No auth required — public endpoint, secured by HMAC signature)
-
-  ├── 1. AUDIT LOG FIRST
-  │   → Write WebhookEvent(event_type, payload, processed=False) to DB
-  │   → db.commit() immediately — event is never lost
-  │
-  ├── 2. SIGNATURE VERIFICATION
-  │   → HMAC-SHA256(raw_body, RAZORPAY_WEBHOOK_SECRET)
-  │   → hmac.compare_digest() — safe against timing attacks
-  │
-  ├── 3. EVENT ROUTING (event_type)
-  │   ├── "payment.captured" → handle_payment_success()
-  │   ├── "order.paid"       → recognized, extensible
-  │   └── anything else      → logged as ignored
-  │
-  ├── 4. handle_payment_success()
-  │   → Lookup Transaction by razorpay_order_id
-  │   → IDEMPOTENCY CHECK: already SUCCESS? → return True
-  │   → ATOMIC UPDATE: transaction.status = SUCCESS, order.status = PAID
-  │   → AFTER COMMIT: queue Celery invoice email
-  │
-  └── 5. MARK PROCESSED → webhook_log.processed = True → return {"status": "ok"}
-```
-
----
-
-## Celery Async Task — Invoice Email
-
-After every confirmed payment (via webhook or `/verify-payment`), an HTML invoice email is dispatched as a non-blocking Celery background task.
-
-```python
-send_invoice_email.delay(
-    user_email=...,
-    user_id=...,
-    order_id=...,
-    amount=...,
-    coupon_discount=...   # included if coupon was applied
-)
-```
-
-- **Task name:** `send_invoice_email`
-- **Broker & backend:** Redis (same authenticated instance as token blacklist)
-- **Retry policy:** `max_retries=3`, `countdown=60` seconds between retries
-- **Template:** Styled HTML receipt with Order ID, User ID, total paid, and discount applied
-- **Subject:** `Payment Receipt - Order #<last 6 chars of order_id>`
-- **SMTP:** Synchronous `smtplib` (Celery-safe) with optional STARTTLS support
-- **Failure isolation:** Email queue errors are logged as warnings; the payment DB state is never rolled back
-
----
-
-## Order State Machine
-
-```
-PENDING ──────┬──► PAID ──► PROCESSING ──► SHIPPED ──► DELIVERED
-              │     │            │
-              └─────┴────────────┴──────────────────────► CANCELLED
-                           (user can cancel up to PROCESSING)
-                           (admin can cancel up to PROCESSING)
-                           (SHIPPED and DELIVERED are terminal for cancellation)
-```
-
-| From | Allowed Transitions |
-|------|-------------------|
-| `PENDING` | `PAID`, `CANCELLED` |
-| `PAID` | `PROCESSING`, `CANCELLED` |
-| `PROCESSING` | `SHIPPED`, `CANCELLED` |
-| `SHIPPED` | `DELIVERED` |
-| `DELIVERED` | *(terminal)* |
-| `CANCELLED` | *(terminal)* |
-
----
-
-## Coupon & Discount Engine
-
-### How it works
-
-```
-User applies coupon to cart → POST /api/v1/coupons/cart/apply-coupon
-  { "code": "SAVE20" }
-
-User proceeds to checkout → POST /api/v1/orders/checkout
-  (coupon already attached to cart)
-
-CouponService.validate_and_apply(code, user_id, subtotal):
-  1. Lookup coupon by code (case-insensitive, uppercase-normalized)
-  2. Check coupon.is_active == True                        → 400 if inactive
-  3. Check valid_from <= now() <= valid_until              → 400 if outside range
-  4. Check coupon.total_used_count < coupon.max_total_uses → 400 if exhausted
-  5. Check per-user usage < coupon.max_uses_per_user      → 400 if user limit hit
-  6. Check subtotal >= coupon.min_order_value             → 400 with min value in message
-  7. Calculate discount:
-       PERCENTAGE → min(subtotal * (value / 100), max_discount_cap)   ← cap applied if set
-       FLAT       → min(value, subtotal)                               ← never below ₹0
-  8. Return discount_amount (does NOT commit — checkout transaction handles it)
-
-On Order creation (same atomic transaction):
-  → coupon.total_used_count += 1
-  → CouponUsage(coupon_id, user_id, order_id) inserted
-  → order.coupon_id = coupon.id
-  → order.coupon_discount = discount_amount
-
-On Order cancellation:
-  → coupon.total_used_count -= 1
-  → CouponUsage record deleted
-  → order.coupon_discount remains for audit trail
-
-Admin can also:
-  → Remove coupon from cart: DELETE /api/v1/coupons/cart/remove-coupon
-  → Partial update: PATCH /api/v1/admin/coupons/{code}
-  → Deactivate: PATCH /api/v1/admin/coupons/{code}/deactivate
-  → Fetch by code: GET /api/v1/admin/coupons/{code}
-```
-
-### Coupon Model
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | UUID | Primary key |
-| `code` | String(50) | Unique, uppercase-normalized, indexed |
-| `discount_type` | Enum | `PERCENTAGE` or `FLAT` |
-| `discount_value` | Numeric | % value or ₹ flat amount |
-| `min_order_value` | Numeric | Minimum subtotal to apply, default 0 |
-| `max_discount_cap` | Numeric | Max ₹ cap for percentage discounts (optional) |
-| `max_total_uses` | Integer | Global usage cap |
-| `max_uses_per_user` | Integer | Per-user usage cap (default 1) |
-| `total_used_count` | Integer | Auto-incremented on use |
-| `valid_from` | DateTime(tz) | Start datetime |
-| `valid_until` | DateTime(tz) | Expiry datetime |
-| `is_active` | Boolean | Admin toggle |
-| `created_at` | DateTime | Auto-set |
-
-### CouponUsage Model
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | UUID | Primary key |
-| `coupon_id` | FK → Coupon | Indexed |
-| `user_id` | FK → User | Indexed |
-| `order_id` | FK → Order | For audit trail |
-| `used_at` | DateTime | Auto-set |
-| `UniqueConstraint` | (coupon_id, user_id) | Enforces per-user limit |
-
----
-
-## Inventory Management System
-
-### How it works
-
-```
-Every stock change creates an immutable StockMovement record.
-
-Admin triggers:
-  POST /api/v1/admin/inventory/{product_id}/adjust
-    → quantity_delta (positive or negative), reason (min 10 chars)
-    → Records ADJUSTMENT movement
-    → NegativeStockError raised if result < 0
-
-  POST /api/v1/admin/inventory/{product_id}/restock
-    → quantity_to_add (positive only)
-    → Records RESTOCK movement
-
-  PATCH /api/v1/admin/inventory/{product_id}/thresholds
-    → Updates low_stock_threshold and/or reorder_point on Product
-
-Automatic triggers (by order service):
-  → Checkout:      records SALE movement per item
-  → Cancellation:  records RETURN movement per item
-
-Admin queries:
-  GET /api/v1/admin/inventory/low-stock        → products below low_stock_threshold (paginated)
-  GET /api/v1/admin/inventory/reorder-alerts   → products at or below reorder_point
-  GET /api/v1/admin/inventory/report           → aggregated summary stats
-  GET /api/v1/admin/inventory/{product_id}/movements
-    → filterable by movement_type, start_date, end_date; paginated
-```
-
-### StockMovement Model
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | UUID | Primary key |
-| `product_id` | FK → Product | Indexed, CASCADE on delete |
-| `movement_type` | Enum | `SALE`, `RETURN`, `RESTOCK`, `ADJUSTMENT` |
-| `quantity_changed` | Integer | Signed delta (negative for SALE) |
-| `quantity_before` | Integer | Stock snapshot before change |
-| `quantity_after` | Integer | Stock snapshot after change |
-| `reference_id` | UUID | Optional — e.g. Order ID for SALE/RETURN |
-| `reason` | String(500) | Optional description |
-| `performed_by` | FK → User | Admin who triggered manual changes |
-| `created_at` | DateTime | Auto-set, indexed |
-
-### Product Inventory Fields (additions to existing model)
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `low_stock_threshold` | Integer | Alert threshold; configurable per product |
-| `reorder_point` | Integer | Reorder alert level; configurable per product |
-
----
-
-## Admin Panel
-
-All admin routes are under `/api/v1/admin` and require `require_roles("admin")`.
-
-### Product Management
-
-| Action | What it does |
-|--------|-------------|
-| Create product | Full product creation with auto-slug generation |
-| List all products | Returns active **and** soft-deleted products — ordered by `is_deleted ASC, name ASC` |
-| Partial update | Update `price`, `stock_quantity`, `description`, `attributes` — any subset |
-| Soft delete | Sets `is_deleted=True`; product hidden from public but preserved for order history |
-
-### Order Management
-
-| Action | What it does |
-|--------|-------------|
-| List all orders | Platform-wide, paginated, filterable by `status` query param |
-| Update order status | State-machine-validated transition; descriptive error on invalid move |
-
-### Coupon Management
-
-| Action | What it does |
-|--------|-------------|
-| Create coupon | Full coupon creation with type, value, cap, date range, per-user limits |
-| List coupons | All coupons with filters (`active_only`, `expired`, `search`), paginated |
-| Get coupon by code | Fetch single coupon details |
-| Update coupon | Partial update of any field(s) |
-| Deactivate coupon | Set `is_active=False` without deleting |
-
-### Inventory Management
-
-| Action | What it does |
-|--------|-------------|
-| Low-stock report | Lists all products below their `low_stock_threshold` |
-| Reorder alerts | Lists all products at or below `reorder_point` |
-| Stock summary | Aggregated report — total, out-of-stock, low-stock, reorder counts |
-| Movement history | Per-product audit log, filterable by type and date range |
-| Adjust stock | Positive or negative `quantity_delta` with mandatory reason |
-| Restock | Add positive stock quantity with optional reason |
-| Update thresholds | Set `low_stock_threshold` and `reorder_point` per product |
-
----
-
-## Custom Exception Hierarchy
-
-```
-Exception (Python built-in)
-└── AppException (Base — HTTP status + error_code co-located)
-    ├── BadRequestError (400)
-    │   ├── CartEmptyError
-    │   ├── InsufficientStockError
-    │   ├── ProductUnavailableError
-    │   ├── InvalidAddressError
-    │   ├── MinimumOrderError
-    │   ├── PaymentVerificationError
-    │   ├── OrderCancellationError
-    │   ├── InvalidStatusTransitionError
-    │   ├── InvalidTokenError
-    │   ├── WebhookSignatureError
-    │   ├── CouponInactiveError
-    │   ├── CouponExpiredError
-    │   ├── CouponLimitReachedError
-    │   ├── CouponUserLimitReachedError
-    │   ├── MinimumOrderNotMetError
-    │   ├── CouponAlreadyAppliedError
-    │   ├── NegativeStockError              ← Inventory
-    │   ├── StockAdjustmentReasonRequired   ← Inventory
-    │   └── InvalidStockQuantityError       ← Inventory
-    ├── UnauthorizedError (401)
-    │   ├── AuthenticationError
-    │   ├── TokenCompromisedError
-    │   └── SessionInvalidatedError
-    ├── ForbiddenError (403)
-    │   └── AccountInactiveError
-    ├── NotFoundError (404)
-    │   └── CouponNotFoundError
-    ├── ConflictError (409)
-    │   ├── EmailAlreadyExistsError
-    │   └── UsernameAlreadyExistsError
-    ├── RateLimitError (429)
-    └── ServiceUnavailableError (503)
-        ├── PaymentGatewayError
-        ├── DatabaseError
-        └── DataIntegrityError
-```
-
-Global handlers in `error_handlers.py` catch all `AppException` subtypes and return structured JSON with `status_code`, `error_code`, and `message`. A final `Exception` handler acts as a safety net for anything unexpected.
-
----
-
-## API Endpoints Reference
-
-### Authentication — `/auth`
+<details>
+<summary><b>🔐 Auth</b> — <code>/auth</code> — Registration, login, token management</summary>
 
 | Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/auth/register` | Public | Register, sends verification email |
-| `POST` | `/auth/resend-verification` | Public | Resend verification (2 min cooldown) |
-| `GET` | `/auth/verify` | Public | Activate account via token |
-| `POST` | `/auth/login` | Public | Login, returns token pair |
-| `POST` | `/auth/refresh` | Public | Rotate refresh token |
+|:---|:---|:---|:---|
+| `POST` | `/auth/register` | — | Register + send verification email |
+| `GET` | `/auth/verify` | — | Activate account via email token |
+| `POST` | `/auth/resend-verification` | — | Resend email (2-min Redis cooldown) |
+| `POST` | `/auth/login` | — | Returns access + refresh token pair |
+| `POST` | `/auth/refresh` | — | Rotate refresh token (theft detection) |
 | `POST` | `/auth/logout` | Bearer | Blacklist access token |
-| `POST` | `/auth/forgot-password` | Public | Trigger reset (generic response) |
-| `POST` | `/auth/reset-password` | Public | Reset password, invalidate all sessions |
+| `POST` | `/auth/forgot-password` | — | Trigger reset (generic response) |
+| `POST` | `/auth/reset-password` | — | Reset + invalidate all sessions |
 
-### Users — `/api/v1/users`
+</details>
+
+<details>
+<summary><b>👤 Users</b> — <code>/api/v1/users</code> — Profile & history</summary>
 
 | Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
+|:---|:---|:---|:---|
 | `GET` | `/api/v1/users/me` | Bearer | Get own profile |
 | `PATCH` | `/api/v1/users/me` | Bearer | Update name, email, phone |
-| `GET` | `/api/v1/users/me/orders` | Bearer | Personal order history (paginated) |
+| `GET` | `/api/v1/users/me/orders` | Bearer | Order history (paginated) |
 
-### Admin Panel — `/api/v1/admin`
+</details>
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/v1/admin/products` | Admin | Create product |
-| `GET` | `/api/v1/admin/products` | Admin | List all products (incl. deleted) |
-| `PATCH` | `/api/v1/admin/products/{id}` | Admin | Partial update product |
-| `DELETE` | `/api/v1/admin/products/{id}` | Admin | Soft-delete product |
-| `GET` | `/api/v1/admin/orders` | Admin | List all orders (filterable by status) |
-| `PATCH` | `/api/v1/admin/orders/{id}/status` | Admin | Update order status |
-
-### Coupons — `/api/v1/coupons` & `/api/v1/admin/coupons`
+<details>
+<summary><b>📦 Catalog</b> — <code>/api/v1/products</code> — Products & categories</summary>
 
 | Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/v1/coupons/cart/apply-coupon` | Bearer | Apply coupon to active cart |
-| `DELETE` | `/api/v1/coupons/cart/remove-coupon` | Bearer | Remove coupon from active cart |
-| `POST` | `/api/v1/admin/coupons` | Admin | Create coupon |
-| `GET` | `/api/v1/admin/coupons` | Admin | List coupons (filterable, paginated) |
-| `GET` | `/api/v1/admin/coupons/{code}` | Admin | Get coupon by code |
-| `PATCH` | `/api/v1/admin/coupons/{code}` | Admin | Partial update coupon |
-| `PATCH` | `/api/v1/admin/coupons/{code}/deactivate` | Admin | Deactivate coupon |
-
-### Inventory — `/api/v1/admin/inventory`
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET` | `/api/v1/admin/inventory/low-stock` | Admin | Products below low-stock threshold |
-| `GET` | `/api/v1/admin/inventory/reorder-alerts` | Admin | Products at/below reorder point |
-| `GET` | `/api/v1/admin/inventory/report` | Admin | Aggregated stock summary |
-| `GET` | `/api/v1/admin/inventory/{product_id}/movements` | Admin | Movement history (filterable, paginated) |
-| `POST` | `/api/v1/admin/inventory/{product_id}/adjust` | Admin | Adjust stock (positive or negative delta) |
-| `POST` | `/api/v1/admin/inventory/{product_id}/restock` | Admin | Add stock (positive only) |
-| `PATCH` | `/api/v1/admin/inventory/{product_id}/thresholds` | Admin | Update low-stock / reorder thresholds |
-
-### Catalog — `/api/v1/products`
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
+|:---|:---|:---|:---|
 | `POST` | `/api/v1/products/categories` | Public | Create category |
 | `GET` | `/api/v1/products/categories` | Public | List categories |
-| `POST` | `/api/v1/products/` | Public | Create product |
 | `GET` | `/api/v1/products/` | Public | List active products (paginated) |
-| `GET` | `/api/v1/products/{id}` | Public | Get product by ID |
+| `GET` | `/api/v1/products/{id}` | Public | Product detail |
+| `POST` | `/api/v1/products/` | Public | Create product |
 | `DELETE` | `/api/v1/products/{id}` | Public | Soft-delete product |
 
-### Cart — `/api/v1/cart`
+</details>
+
+<details>
+<summary><b>🛒 Cart</b> — <code>/api/v1/cart</code> — Cart management</summary>
 
 | Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET` | `/api/v1/cart/` | Bearer | Get cart |
-| `POST` | `/api/v1/cart/items` | Bearer | Add item |
+|:---|:---|:---|:---|
+| `GET` | `/api/v1/cart/` | Bearer | View cart (auto-creates if missing) |
+| `POST` | `/api/v1/cart/items` | Bearer | Add item (stock validated) |
 | `PUT` | `/api/v1/cart/items/{id}` | Bearer | Set quantity |
-| `PATCH` | `/api/v1/cart/items/{id}/decrease` | Bearer | Decrease by 1 |
+| `PATCH` | `/api/v1/cart/items/{id}/decrease` | Bearer | Decrease by 1 (auto-removes at 0) |
 | `DELETE` | `/api/v1/cart/items/{id}` | Bearer | Remove item |
-| `DELETE` | `/api/v1/cart/` | Bearer | Clear cart |
+| `DELETE` | `/api/v1/cart/` | Bearer | Clear entire cart |
 
-### Orders — `/api/v1/orders`
+</details>
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/v1/orders/checkout` | Bearer | Create Razorpay order + DB order |
-| `POST` | `/api/v1/orders/verify-payment` | Bearer | Verify signature, mark PAID |
-| `GET` | `/api/v1/orders/` | Bearer | List paid orders |
-| `GET` | `/api/v1/orders/{id}` | Bearer | Get order details |
-| `PATCH` | `/api/v1/orders/{id}/cancel` | Bearer | Cancel order + restore stock + rollback coupon |
-
-### Addresses — `/api/v1/addresses`
+<details>
+<summary><b>💳 Orders</b> — <code>/api/v1/orders</code> — Checkout & payments</summary>
 
 | Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
+|:---|:---|:---|:---|
+| `POST` | `/api/v1/orders/checkout` | Bearer | Create Razorpay order + DB order (atomic) |
+| `POST` | `/api/v1/orders/verify-payment` | Bearer | Verify signature → mark PAID |
+| `GET` | `/api/v1/orders/` | Bearer | List user's paid orders |
+| `GET` | `/api/v1/orders/{id}` | Bearer | Order detail |
+| `PATCH` | `/api/v1/orders/{id}/cancel` | Bearer | Cancel + stock + coupon rollback |
+
+</details>
+
+<details>
+<summary><b>🎟️ Coupons</b> — User & Admin coupon operations</summary>
+
+| Method | Endpoint | Auth | Description |
+|:---|:---|:---|:---|
+| `POST` | `/api/v1/coupons/cart/apply-coupon` | Bearer | Apply coupon to cart |
+| `DELETE` | `/api/v1/coupons/cart/remove-coupon` | Bearer | Remove coupon from cart |
+| `POST` | `/api/v1/admin/coupons` | Admin | Create coupon |
+| `GET` | `/api/v1/admin/coupons` | Admin | List coupons (filterable) |
+| `GET` | `/api/v1/admin/coupons/{code}` | Admin | Get coupon by code |
+| `PATCH` | `/api/v1/admin/coupons/{code}` | Admin | Partial update |
+| `PATCH` | `/api/v1/admin/coupons/{code}/deactivate` | Admin | Deactivate coupon |
+
+</details>
+
+<details>
+<summary><b>🛠️ Admin</b> — <code>/api/v1/admin</code> — Product & order management</summary>
+
+| Method | Endpoint | Auth | Description |
+|:---|:---|:---|:---|
+| `POST` | `/api/v1/admin/products` | Admin | Create product |
+| `GET` | `/api/v1/admin/products` | Admin | List all (incl. soft-deleted) |
+| `PATCH` | `/api/v1/admin/products/{id}` | Admin | Partial update |
+| `DELETE` | `/api/v1/admin/products/{id}` | Admin | Soft-delete |
+| `GET` | `/api/v1/admin/orders` | Admin | List all orders (status filter) |
+| `PATCH` | `/api/v1/admin/orders/{id}/status` | Admin | State-machine validated transition |
+
+</details>
+
+<details>
+<summary><b>📊 Inventory</b> — <code>/api/v1/admin/inventory</code> — Stock management</summary>
+
+| Method | Endpoint | Auth | Description |
+|:---|:---|:---|:---|
+| `GET` | `/admin/inventory/low-stock` | Admin | Products below threshold |
+| `GET` | `/admin/inventory/reorder-alerts` | Admin | Products at/below reorder point |
+| `GET` | `/admin/inventory/report` | Admin | Aggregated stock summary |
+| `GET` | `/admin/inventory/{id}/movements` | Admin | Movement history (filterable) |
+| `POST` | `/admin/inventory/{id}/adjust` | Admin | ± stock delta with reason |
+| `POST` | `/admin/inventory/{id}/restock` | Admin | Add positive stock |
+| `PATCH` | `/admin/inventory/{id}/thresholds` | Admin | Update alert thresholds |
+
+</details>
+
+<details>
+<summary><b>📍 Addresses & Webhooks</b></summary>
+
+| Method | Endpoint | Auth | Description |
+|:---|:---|:---|:---|
 | `GET` | `/api/v1/addresses/` | Bearer | List addresses |
-| `POST` | `/api/v1/addresses/` | Bearer | Add address |
-| `PATCH` | `/api/v1/addresses/{id}` | Bearer | Update address |
-| `PATCH` | `/api/v1/addresses/{id}/default` | Bearer | Set as default |
-| `DELETE` | `/api/v1/addresses/{id}` | Bearer | Soft-delete address |
+| `POST` | `/api/v1/addresses/` | Bearer | Add address (first = auto-default) |
+| `PATCH` | `/api/v1/addresses/{id}` | Bearer | Update |
+| `PATCH` | `/api/v1/addresses/{id}/default` | Bearer | Set as default (atomic) |
+| `DELETE` | `/api/v1/addresses/{id}` | Bearer | Soft-delete |
+| `POST` | `/api/v1/webhooks/razorpay` | HMAC | Receive Razorpay payment events |
 
-### Webhooks — `/api/v1/webhooks`
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/v1/webhooks/razorpay` | HMAC Signature | Receive Razorpay payment events |
+</details>
 
 ---
 
-## Data Models
+## 🚀 Quick Start
 
-### User
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | UUID | Primary key |
-| `username` | String(50) | Unique, alphanumeric + underscore |
-| `email` | String(100) | Unique, lowercased |
-| `hashed_password` | String | Argon2 |
-| `password_changed_at` | DateTime(tz) | Global session invalidation anchor |
-| `full_name` | String(100) | Optional, updatable via `/users/me` |
-| `phone_number` | String(20) | Optional, validated as Indian mobile |
-| `is_active` | Boolean | False until email verified |
-| `is_admin` | Boolean | Role flag |
-| `is_deleted` | Boolean | Soft delete |
+### Prerequisites
 
-### Product & Category
-- `Category` — self-referential `parent_id`, soft delete, `sub_categories` lazy-loaded via `selectin`
-- `Product` — JSONB `attributes`, soft delete, slug auto-generated from name, `low_stock_threshold` and `reorder_point` for inventory alerts
+- Docker & Docker Compose
+- Git
 
-### Cart & CartItem
-- `Cart` — user-scoped, auto-created; `total_price` as ORM `@property`; coupon pre-attachable
-- `CartItem` — `UniqueConstraint(cart_id, product_id)`, real-time stock validation
+### 1. Clone & Configure
 
-### Order & OrderItem
-| Field | Notes |
-|-------|-------|
-| `subtotal_price` | Raw item total |
-| `tax_price` | 18% GST |
-| `coupon_discount` | Discount amount applied (0 if no coupon) |
-| `shipping_price` | ₹50 flat, waived above ₹500 |
-| `total_price` | Grand total sent to Razorpay in paise |
-| `coupon_id` | FK → Coupon (nullable) |
-| `shipping_address_snapshot` | Text copy frozen at checkout |
-| `OrderItem.price_at_purchase` | Price frozen at checkout |
-| `OrderItem.product_name` | Name frozen at checkout |
-| `status` | Enforced by state machine |
-
-### Address
-| Field | Notes |
-|-------|-------|
-| `address_type` | Enum: `home`, `office`, `other` |
-| `is_default` | One per user, atomically enforced |
-| `is_deleted` | Soft delete, preserves order reference integrity |
-
-### Transaction
-| Field | Notes |
-|-------|-------|
-| `razorpay_order_id` | From Razorpay order creation |
-| `razorpay_payment_id` | Populated after verification |
-| `razorpay_signature` | Stored for audit trail |
-| `status` | `PENDING` → `SUCCESS` / `FAILED` |
-
-### Coupon & CouponUsage
-See [Coupon & Discount Engine](#coupon--discount-engine) section above.
-
-### StockMovement
-See [Inventory Management System](#inventory-management-system) section above.
-
-### WebhookEvent
-| Field | Notes |
-|-------|-------|
-| `event_type` | Indexed string — e.g. `payment.captured` |
-| `payload` | Full raw JSONB event for audit and replay |
-| `processed` | `False` on arrival; `True` after successful handling |
-| `created_at` | Auto-set at insert |
-
----
-
-## Local Setup (Docker)
-
-### 1. Clone the repository
 ```bash
 git clone https://github.com/Vishwam401/E-commerce.git
 cd E-commerce
 ```
 
-### 2. Create the environment file
 Create `.env.docker` in the project root:
 
 ```env
-# Database
+# ──── Database ────
 DATABASE_URL=postgresql+asyncpg://postgres:vish@db:5432/ecommerce_db
 
-# JWT
+# ──── JWT ────
 SECRET_KEY=your_super_secret_key_min_32_chars
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 
-# Redis
+# ──── Redis ────
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_PASSWORD=your_redis_password
 
-# Email (Gmail SMTP example)
+# ──── Email (Gmail SMTP) ────
 MAIL_USERNAME=your_email@gmail.com
 MAIL_PASSWORD=your_app_password
 MAIL_FROM=your_email@gmail.com
@@ -881,127 +782,94 @@ MAIL_PORT=587
 MAIL_SERVER=smtp.gmail.com
 MAIL_STARTTLS=True
 MAIL_SSL_TLS=False
+EMAIL_VERIFY_BASE_URL=http://localhost:8001
 
-# For LAN/mobile testing
-EMAIL_VERIFY_BASE_URL=http://192.168.x.x:8001
-
-# Razorpay (get from razorpay.com/app/keys)
+# ──── Razorpay ────
 RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxx
 RAZORPAY_SECRET_KEY=your_razorpay_secret
 RAZORPAY_WEBHOOK_SECRET=your_razorpay_webhook_secret
 ```
 
-### 3. Start all services
+### 2. Launch
+
 ```bash
+cd backend
 docker compose up --build -d
 ```
 
-### 4. Run database migrations
+### 3. Run Migrations
+
 ```bash
 docker compose exec api alembic upgrade head
 ```
 
-### 5. Access the API
+### 4. Access
 
 | Interface | URL |
-|-----------|-----|
-| API Root | `http://localhost:8001` |
-| Swagger UI | `http://localhost:8001/docs` |
-| ReDoc | `http://localhost:8001/redoc` |
+|:---|:---|
+| API Root | [`http://localhost:8001`](http://localhost:8001) |
+| Swagger UI | [`http://localhost:8001/docs`](http://localhost:8001/docs) |
+| ReDoc | [`http://localhost:8001/redoc`](http://localhost:8001/redoc) |
 
 ---
 
-## Environment Variables
+## 🛠 Tech Stack
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | ✅ | PostgreSQL async connection string |
-| `SECRET_KEY` | ✅ | JWT signing key (min 32 chars) |
-| `ALGORITHM` | ✅ | JWT algorithm (`HS256`) |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | ✅ | Access token lifetime |
-| `REDIS_HOST` | ✅ | Redis hostname |
-| `REDIS_PORT` | ✅ | Redis port (default `6379`) |
-| `REDIS_PASSWORD` | ✅ | Redis auth password |
-| `MAIL_USERNAME` | ✅ | SMTP username |
-| `MAIL_PASSWORD` | ✅ | SMTP password / app password |
-| `MAIL_FROM` | ✅ | Sender email |
-| `MAIL_PORT` | ✅ | SMTP port |
-| `MAIL_SERVER` | ✅ | SMTP server |
-| `MAIL_STARTTLS` | ✅ | `True`/`False` |
-| `MAIL_SSL_TLS` | ✅ | `True`/`False` |
-| `EMAIL_VERIFY_BASE_URL` | ✅ | Base URL for verification links |
-| `RAZORPAY_KEY_ID` | ✅ | Razorpay API key ID |
-| `RAZORPAY_SECRET_KEY` | ✅ | Razorpay secret key |
-| `RAZORPAY_WEBHOOK_SECRET` | ✅ | Razorpay webhook secret (from Dashboard → Webhooks) |
+| Layer | Technology | Purpose |
+|:---|:---|:---|
+| **Framework** | FastAPI 0.135 | Async REST API with auto-docs |
+| **Language** | Python 3.11+ | Type hints, async/await |
+| **Database** | PostgreSQL 15 | Primary data store (via asyncpg) |
+| **ORM** | SQLAlchemy 2.0 | Fully async, mapped columns |
+| **Migrations** | Alembic | Schema versioning |
+| **Cache** | Redis Alpine | Token blacklist, rate limits, Celery broker |
+| **Auth** | Argon2 + JWT | Hashing (passlib) + python-jose tokens |
+| **Email** | smtplib (Celery) | Synchronous SMTP in worker (async-safe) |
+| **Payments** | Razorpay SDK | Live order creation + signature verify |
+| **Webhooks** | HMAC-SHA256 | Timing-attack safe via `compare_digest` |
+| **Task Queue** | Celery | Redis broker + backend, auto-retry |
+| **Validation** | Pydantic v2 | Request/response schemas |
+| **Containers** | Docker Compose | PostgreSQL + Redis + API + Celery worker |
 
 ---
 
-## Quick Verification Checklist
+## ✅ Smoke Test Checklist
 
-1. **Register** → `POST /auth/register`
-2. **Verify email** → `GET /auth/verify?token=...`
-3. **Login** → `POST /auth/login`, save tokens
-4. **View profile** → `GET /api/v1/users/me`
-5. **Update profile** → `PATCH /api/v1/users/me`
-6. **Add address** → `POST /api/v1/addresses/`
-7. **Add items to cart** → `POST /api/v1/cart/items`
-8. **Create coupon (admin)** → `POST /api/v1/admin/coupons` (with `max_discount_cap`, `max_uses_per_user`, `valid_from`)
-9. **Apply coupon to cart** → `POST /api/v1/coupons/cart/apply-coupon`
-10. **Checkout** → `POST /api/v1/orders/checkout` → invoice email queued via Celery
-11. **Verify payment** → `POST /api/v1/orders/verify-payment`
-12. **Webhook test** → `POST /api/v1/webhooks/razorpay` with valid `x-razorpay-signature` header
-13. **Cancel order** → `PATCH /api/v1/orders/{id}/cancel` (PENDING/PAID/PROCESSING; coupon + stock rolled back)
-14. **Admin: update order status** → `PATCH /api/v1/admin/orders/{id}/status`
-15. **Admin: stock summary** → `GET /api/v1/admin/inventory/report`
-16. **Admin: restock product** → `POST /api/v1/admin/inventory/{product_id}/restock`
-17. **Admin: view movement history** → `GET /api/v1/admin/inventory/{product_id}/movements`
-18. **Admin: set thresholds** → `PATCH /api/v1/admin/inventory/{product_id}/thresholds`
-19. **Rate limit test** → 6+ bad login attempts → `429`; wait 60s → works again
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Framework | FastAPI 0.135 |
-| Language | Python 3.11+ |
-| Database | PostgreSQL 15 (`asyncpg`) |
-| ORM | SQLAlchemy 2.0 (async) |
-| Migrations | Alembic |
-| Cache / Blacklist | Redis (Authenticated, Alpine) |
-| Password Hashing | Argon2 (via passlib) |
-| JWT | python-jose |
-| Email | FastAPI-Mail / SMTP |
-| Payments | Razorpay SDK |
-| Webhooks | HMAC-SHA256 (standard library `hmac`) |
-| Task Queue | Celery (active — invoice email delivery) |
-| Containerization | Docker / Docker Compose |
-| Validation | Pydantic v2 |
-| Testing | pytest, Schemathesis |
+```
+ 1. POST  /auth/register                          → verification email sent
+ 2. GET   /auth/verify?token=...                  → account activated
+ 3. POST  /auth/login                             → save access + refresh tokens
+ 4. GET   /api/v1/users/me                        → profile returned
+ 5. POST  /api/v1/addresses/                      → add shipping address
+ 6. POST  /api/v1/cart/items                      → add products to cart
+ 7. POST  /api/v1/admin/coupons          (admin)  → create coupon
+ 8. POST  /api/v1/coupons/cart/apply-coupon       → attach coupon to cart
+ 9. POST  /api/v1/orders/checkout                 → receive razorpay_order_id
+10. POST  /api/v1/orders/verify-payment           → mark PAID, invoice queued
+11. POST  /api/v1/webhooks/razorpay               → test with valid HMAC header
+12. PATCH /api/v1/orders/{id}/cancel              → stock + coupon rolled back
+13. PATCH /api/v1/admin/orders/{id}/status        → test state machine transitions
+14. GET   /api/v1/admin/inventory/report          → stock summary
+15. POST  /api/v1/admin/inventory/{id}/restock    → test RESTOCK movement
+16. 6+ bad logins                                 → 429 → wait 60s → 200
+```
 
 ---
 
-## Roadmap
+## 🗺 Roadmap
 
-- [x] JWT Authentication with email verification
-- [x] Redis-backed token blacklist & rate limiting
-- [x] Modular model architecture
-- [x] Catalog — Products & Categories
-- [x] Full Cart lifecycle
-- [x] Order & Checkout with atomic stock management
-- [x] Address Book with soft delete & default management
-- [x] Razorpay live payment integration & signature verification
-- [x] Order Cancellation with atomic stock rollback
-- [x] Admin Panel — product & order management
+- [x] JWT auth with email verification, refresh rotation & theft detection
+- [x] Redis token blacklist + dual-layer rate limiting
+- [x] Full cart & order lifecycle with atomic stock management
+- [x] Razorpay live payment integration + signature verification
+- [x] Server-side webhook handler with audit log
+- [x] Celery async invoice email (HTML, auto-retry)
 - [x] Order state machine with validated transitions
-- [x] User Profile — fetch & update with phone validation
-- [x] Razorpay webhook handler — server-side payment confirmation with audit log
-- [x] Celery async tasks — HTML invoice email on payment confirmation
-- [x] Coupon & Discount Engine — percentage/flat, per-user limits, expiry, usage cap, max discount cap
-- [x] Inventory Management System — stock movement audit trail, low-stock alerts, reorder points, admin adjust/restock
-- [x] Custom Exception Hierarchy — domain-specific errors with structured HTTP responses
-- [x] Validators module — reusable field-level validators extracted from schemas
+- [x] Order cancellation with atomic stock + coupon rollback
+- [x] Coupon engine (%, flat, caps, per-user limits, race-condition safe)
+- [x] Inventory management — stock movement audit, low-stock alerts, reorder points
+- [x] Admin panel — products, orders, coupons, inventory
+- [x] Custom exception hierarchy (20+ classes) with structured global handlers
 - [ ] Redis-backed cart caching
 - [ ] Sentry error tracking integration
 - [ ] Product reviews & ratings
@@ -1009,12 +877,6 @@ docker compose exec api alembic upgrade head
 
 ---
 
-## Contributing
-
-Contributions, issues, and feature requests are welcome. Check the [issues page](https://github.com/Vishwam401/E-commerce/issues) to get started.
-
----
-
 <p align="center">
-  Built with ❤️ by <a href="https://github.com/Vishwam401">Vishwam401</a>
+  <sub>Built with ❤️ by <a href="https://github.com/Vishwam401">Vishwam401</a></sub>
 </p>
