@@ -15,7 +15,7 @@ from app.core.error_handlers import (
 )
 from app.core.logging_config import configure_logging
 from app.api.v1.auth import router as auth_router
-from app.api.v1 import products, cart, order, address, users, admin, webhooks, inventory
+from app.api.v1 import products, cart, order, address, users, admin, webhooks, inventory, ws
 
 
 from app.api.v1 import coupon
@@ -46,6 +46,8 @@ app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["Webhooks"]
 app.include_router(coupon.router, prefix="/api/v1", tags=["Coupons"])
 
 app.include_router(inventory.router, prefix="/api/v1/admin/inventory", tags=["Inventory"])
+
+app.include_router(ws.router, prefix="/api/v1/ws", tags=["WebSockets"])
 
 
 @app.get("/")

@@ -23,8 +23,10 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_ID: str
     RAZORPAY_SECRET_KEY: str
     RAZORPAY_WEBHOOK_SECRET: str
+    DEBUG: bool = False
 
     model_config = SettingsConfigDict(env_file=".env.docker")
 
 
 settings = Settings()
+

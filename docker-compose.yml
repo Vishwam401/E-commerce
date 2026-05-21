@@ -22,7 +22,7 @@ services:
     volumes:
       - .:/app  # Hot-reload ke liye local code ko container se link kiya
     env_file:
-      - ../.env.docker
+      - ./.env.docker
     depends_on:
       - db
       - redis
@@ -32,7 +32,7 @@ services:
     image: redis:alpine
     container_name: ecommerce_redis
     env_file:
-      - ../.env.docker
+      - ./.env.docker
     command: sh -c 'redis-server --requirepass "$${REDIS_PASSWORD}"'
     expose:
       - "6379"
@@ -43,7 +43,7 @@ services:
     build: .
     container_name: ecommerce_celery_worker
     env_file:
-      - ../.env.docker
+      - ./.env.docker
     volumes:
       - .:/app
     depends_on:
