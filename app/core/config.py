@@ -25,8 +25,11 @@ class Settings(BaseSettings):
     RAZORPAY_WEBHOOK_SECRET: str
     DEBUG: bool = False
 
+    # Redis Cart Cache
+    CART_CACHE_TTL: int = 604800
+    CART_CACHE_ENABLED: bool = True
+
     model_config = SettingsConfigDict(env_file=".env.docker")
 
 
 settings = Settings()
-

@@ -46,6 +46,8 @@ services:
       - ./.env.docker
     volumes:
       - .:/app
+    environment:
+      - PYTHONPATH=/app               # <--- Ye line add karein
     depends_on:
       - db
       - redis

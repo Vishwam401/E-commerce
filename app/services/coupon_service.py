@@ -16,6 +16,8 @@ from app.core.exceptions import (
     NotFoundError,
     BadRequestError,
 )
+from app.services import cart_cache_service as cart_cache
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +160,19 @@ async def apply_coupon_to_cart(
         f"discount={discount}, subtotal={cart_subtotal}, final={final_total}"
     )
 
+    # ── Sync coupon meta to Redis cart cache ──
+    if settings.CART_CACHE_ENABLED:
+        try:
+            await cart_cache.set_cart_meta(
+                user_id=user_id,
+                coupon_code=coupon.code,
+                discount_amount=discount,
+            )
+        except Exception as exc:
+            logger.warning(
+                f"[COUPON] Failed to sync coupon meta to Redis: user={user_id}: {exc}"
+            )
+
     return ApplyCouponResponse(
         coupon_code=coupon.code,
         discount_amount=discount,
@@ -181,6 +196,20 @@ async def remove_coupon_from_cart(
 
     if old_coupon_code:
         logger.info(f"[COUPON] Removed from cart: user={cart.user_id}, was={old_coupon_code}")
+
+    # ── Clear coupon meta from Redis cart cache ──
+    if settings.CART_CACHE_ENABLED:
+        try:
+            await cart_cache.set_cart_meta(
+                user_id=cart.user_id,
+                coupon_code=None,
+                discount_amount=Decimal('0.00'),
+            )
+        except Exception as exc:
+            logger.warning(
+                f"[COUPON] Failed to clear coupon meta from Redis: "
+                f"user={cart.user_id}: {exc}"
+            )
 
 
 # 6. USE COUPON IN CHECKOUT — CRITICAL: Race Condition Protection

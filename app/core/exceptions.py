@@ -279,3 +279,16 @@ class StockAdjustmentReasonRequired(BadRequestError):
 class InvalidStockQuantityError(BadRequestError):
     def __init__(self, message: str = "Invalid stock quantity provided."):
         super().__init__(message)
+
+
+# ═══════════════════════════════════════════════════════════════
+# CART CACHE EXCEPTIONS
+# ═══════════════════════════════════════════════════════════════
+
+class CartCacheSyncError(ServiceUnavailableError):
+    """Redis→DB sync failed but user operation succeeded in Redis.
+    This is a non-fatal error — the user's cart is safe in Redis,
+    DB will catch up on next sync or cache miss fallback."""
+
+    def __init__(self, message: str = "Cart sync delayed. Your changes are saved."):
+        super().__init__(message)
