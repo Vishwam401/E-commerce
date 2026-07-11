@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     CART_CACHE_TTL: int = 604800
     CART_CACHE_ENABLED: bool = True
 
+    # Redis Product Cache
+    PRODUCT_CACHE_TTL: int = 300
+    PRODUCT_CACHE_ENABLED: bool = True
+
     model_config = SettingsConfigDict(env_file=".env.docker")
 
 
