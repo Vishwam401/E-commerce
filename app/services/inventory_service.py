@@ -18,6 +18,9 @@ from app.core.exceptions import (
     StockAdjustmentReasonRequired,
     InvalidStockQuantityError,
 )
+from app.core.config import settings
+from app.services import product_cache_service
+
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +104,10 @@ async def admin_adjust_stock(
     product.stock_quantity += quantity_delta
     await db.commit()
 
+    if settings.PRODUCT_CACHE_ENABLED:
+        await product_cache_service.invalidate_product_cache(product_id)
+        await product_cache_service.invalidate_product_list_cache()
+
     # FIX: Re-fetch movement with product eagerly loaded after commit
     # (After commit, lazy loading fails on async sessions)
     result = await db.execute(
@@ -153,7 +160,11 @@ async def admin_restock(
     product.stock_quantity += quantity_to_add
     await db.commit()
 
-   # Re-fetch movement with product eagerly loaded after commit
+    if settings.PRODUCT_CACHE_ENABLED:
+        await product_cache_service.invalidate_product_cache(product_id)
+        await product_cache_service.invalidate_product_list_cache()
+
+    # Re-fetch movement with product eagerly loaded after commit
     # (After commit, lazy loading fails on async sessions)
     result = await db.execute(
         select(StockMovement)
