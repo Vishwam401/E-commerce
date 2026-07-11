@@ -1,12 +1,4 @@
-"""
-Redis Cart Cache Service — Pure Redis cache layer for cart operations.
 
-Data Layout:
-    cart:{user_id}      → Hash { product_id: quantity }
-    cart:meta:{user_id} → Hash { coupon_code, discount_amount }
-
-Only product_id + quantity stored. Prices ALWAYS from DB.
-"""
 
 import uuid
 import logging

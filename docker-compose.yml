@@ -47,7 +47,7 @@ services:
     volumes:
       - .:/app
     environment:
-      - PYTHONPATH=/app               # <--- Ye line add karein
+      - PYTHONPATH=/app
     depends_on:
       - db
       - redis
@@ -56,3 +56,4 @@ services:
 
 volumes:
   postgres_data:
+

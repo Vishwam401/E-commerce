@@ -1,32 +1,12 @@
-"""
-Cart Service — Redis-first with PostgreSQL fallback.
-
-Architecture:
-    Read:  Redis cache → DB fallback on miss → repopulate cache
-    Write: Validate stock in DB → write to Redis → async sync to DB
-    
-    This is a Write-Through pattern:
-    - User gets instant response from Redis
-    - DB sync happens async (fire-and-forget via asyncio.create_task)
-    - If Redis is down, all ops fall back to DB (graceful degradation)
-
-Security:
-    - Stock validation ALWAYS reads from PostgreSQL (never cached)
-    - Prices ALWAYS come from PostgreSQL (never in Redis — prevents price injection)
-    - product_id → quantity is the only data in Redis
-"""
-
 import uuid
 import asyncio
 import logging
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import delete as sa_delete
 
 from app.db.models.cart import Cart, CartItem
 from app.db.models.product import Product
@@ -34,7 +14,6 @@ from app.core.config import settings
 from app.core.exceptions import (
     NotFoundError,
     InsufficientStockError,
-    ProductUnavailableError,
     DatabaseError,
 )
 from app.services import cart_cache_service as cache
@@ -43,22 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 class CartService:
-
-    # ══════════════════════════════════════════════════════════════
-    # INTERNAL: DB Operations (used as fallback + sync target)
-    # ══════════════════════════════════════════════════════════════
-
     @staticmethod
     async def _get_cart_from_db(db: AsyncSession, user_id: uuid.UUID) -> Cart:
-        """
-        Read cart from PostgreSQL with eager-loaded items and products.
-        Creates a new empty cart if none exists.
-        Also cleans up ghost products (deleted/unavailable).
-
-        This is the ORIGINAL get_cart logic — now used as:
-        1. Fallback when Redis is unavailable
-        2. Source for cache population on miss
-        """
         try:
             query = (
                 select(Cart)
@@ -98,12 +63,6 @@ class CartService:
 
     @staticmethod
     async def _populate_cache_from_cart(cart: Cart) -> None:
-        """
-        Populate Redis cache from a DB Cart object.
-        Called on cache miss to warm up the cache.
-        
-        Fire-and-forget — if this fails, next read will try again.
-        """
         if not settings.CART_CACHE_ENABLED:
             return
 
@@ -125,17 +84,6 @@ class CartService:
         user_id: uuid.UUID,
         cache_data: dict[str, int],
     ) -> Cart:
-        """
-        Build a Cart ORM object from Redis cache data + DB product details.
-
-        Why we need DB here: Redis only stores product_id → quantity.
-        Product name, price, slug, stock, is_deleted come from DB.
-        This prevents price injection attacks.
-
-        Also handles ghost product cleanup:
-        If a product was deleted after being added to cart,
-        we remove it from Redis and skip it in the response.
-        """
         # Ensure cart row exists in DB (for cart.id, user_id, timestamps)
         query = (
             select(Cart)
@@ -223,15 +171,6 @@ class CartService:
     def _fire_sync_task(
         user_id: uuid.UUID,
     ) -> None:
-        """
-        Fire-and-forget: schedule async DB sync from Redis state.
-
-        Why asyncio.create_task instead of Celery?
-        - Cart is soft state — if sync is lost, Redis still has the data
-        - Next read will re-populate from Redis → DB sync will catch up
-        - Celery adds broker overhead for a non-critical operation
-        - If the server dies mid-sync, the cart is still in Redis (safe)
-        """
         try:
             asyncio.create_task(
                 CartService._sync_cart_to_db(user_id)
@@ -244,19 +183,7 @@ class CartService:
     async def _sync_cart_to_db(
         user_id: uuid.UUID,
     ) -> None:
-        """
-        Sync Redis cart state to PostgreSQL.
-        Gets its own isolated DB session since it runs in the background.
 
-        Strategy:
-        1. Read full cart from Redis
-        2. Read current DB cart
-        3. Diff and apply changes (add/update/remove items)
-        4. Commit
-
-        This runs as a background task — errors are logged, never raised.
-        The user already got their response from Redis.
-        """
         from app.db.session import async_session_maker
         
         async with async_session_maker() as db:
@@ -334,14 +261,7 @@ class CartService:
 
     @staticmethod
     async def get_cart(db: AsyncSession, user_id: uuid.UUID) -> Cart:
-        """
-        Get user's cart — Redis first, DB fallback.
 
-        Flow:
-        1. Try Redis HGETALL → cache hit → build response with DB product data
-        2. Cache miss → read from PostgreSQL → populate Redis cache → return
-        3. Redis error → transparent fallback to PostgreSQL
-        """
         if settings.CART_CACHE_ENABLED:
             cache_data = await cache.get_cart_from_cache(user_id)
             if cache_data is not None:
@@ -366,17 +286,7 @@ class CartService:
         product_id: uuid.UUID,
         quantity: int,
     ):
-        """
-        Add item to cart — stock validation via DB, write to Redis, async DB sync.
 
-        Flow:
-        1. Validate product exists and has enough stock (DB — always authoritative)
-        2. Check current quantity in Redis (if cache hit) or DB
-        3. Validate total_requested vs stock
-        4. Write to Redis (Lua script — atomic)
-        5. Fire async DB sync
-        6. Return updated cart
-        """
         try:
             # Step 1: Product validation — ALWAYS from DB
             query_product = select(Product).where(
@@ -388,26 +298,15 @@ class CartService:
             if not product:
                 raise NotFoundError("Product not found.")
 
-            # Step 2: Get current quantity (Redis first, DB fallback)
+            # Step 2: Get current quantity — Redis first, DB fallback
             current_qty = 0
-            if settings.CART_CACHE_ENABLED:
-                cache_data = await cache.get_cart_from_cache(user_id)
-                if cache_data is not None:
-                    current_qty = cache_data.get(str(product_id), 0)
-                else:
-                    # Cache miss — check DB for existing item
-                    cart = await CartService._get_cart_from_db(db, user_id)
-                    existing = next(
-                        (i for i in cart.items if str(i.product_id) == str(product_id)),
-                        None,
-                    )
-                    current_qty = existing.quantity if existing else 0
+            cache_data = await cache.get_cart_from_cache(user_id) if settings.CART_CACHE_ENABLED else None
+
+            if cache_data is not None:
+                current_qty = cache_data.get(str(product_id), 0)
             else:
                 cart = await CartService._get_cart_from_db(db, user_id)
-                existing = next(
-                    (i for i in cart.items if str(i.product_id) == str(product_id)),
-                    None,
-                )
+                existing = next((i for i in cart.items if str(i.product_id) == str(product_id)), None)
                 current_qty = existing.quantity if existing else 0
 
             # Step 3: Stock validation
@@ -461,12 +360,7 @@ class CartService:
         item_id: uuid.UUID,
         quantity: int,
     ):
-        """
-        Set exact quantity for a cart item.
-
-        Challenge: The router passes item_id (CartItem.id), but Redis stores by
-        product_id. So we need to resolve item_id → product_id first via DB.
-        """
+        
         if quantity <= 0:
             return await CartService.remove_cart_item(db, user_id, item_id)
 
@@ -502,11 +396,7 @@ class CartService:
         user_id: uuid.UUID,
         item_id: uuid.UUID,
     ):
-        """
-        Remove a single item from cart.
 
-        Same challenge as update: resolve item_id → product_id via DB.
-        """
         cart = await CartService._get_cart_from_db(db, user_id)
         item = next((i for i in cart.items if i.id == item_id), None)
         if not item:
@@ -529,12 +419,7 @@ class CartService:
         db: AsyncSession,
         user_id: uuid.UUID,
     ):
-        """
-        Clear entire cart — Redis + DB.
 
-        Both are cleared synchronously (not async) because this is a
-        destructive operation — we want both stores to agree immediately.
-        """
         # Clear Redis
         if settings.CART_CACHE_ENABLED:
             await cache.clear_cart_cache(user_id)
@@ -553,11 +438,7 @@ class CartService:
         user_id: uuid.UUID,
         item_id: uuid.UUID,
     ):
-        """
-        Decrease item quantity by 1. Auto-remove at 0.
 
-        Uses Lua script in Redis for atomic decrement-or-remove.
-        """
         # Resolve item_id → product_id
         cart = await CartService._get_cart_from_db(db, user_id)
         item = next((i for i in cart.items if i.id == item_id), None)
