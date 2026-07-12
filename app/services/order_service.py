@@ -14,6 +14,8 @@ from app.db.models.order import Order, OrderItem, OrderStatus
 from app.db.models.transaction import Transaction
 from app.db.models.address import Address
 from app.db.models import Product
+from app.db.models.user import User
+from app.worker.tasks import send_notification_email
 from app.core.config import settings
 from app.core.exceptions import (
     AppException,
@@ -311,6 +313,35 @@ async def verify_razorpay_payment(
         await db.commit()
 
         logger.info(f"Payment SUCCESS verified for Order: {order.id}")
+
+        # Invoice email — same trigger the Razorpay webhook uses
+        # (webhook_service.handle_payment_success). Added here too because
+        # locally the webhook never fires (Razorpay can't reach localhost),
+        # so frontend-driven verify-payment needs its own copy of this queue
+        # call. Failures here are logged only — payment/order state is
+        # already committed above and must not be rolled back for an email.
+        try:
+            user_result = await db.execute(select(User).where(User.id == order.user_id))
+            real_user = user_result.scalar_one_or_none()
+
+            if real_user and real_user.email:
+                send_notification_email.delay(
+                    to_email=real_user.email,
+                    subject=f"Payment Receipt - Order #{str(order.id)[-6:]}",
+                    template_name="payment.confirmed",
+                    context={
+                        "order_id_short": str(order.id)[-6:],
+                        "username": getattr(real_user, "name", "Customer"),
+                        "amount": str(float(order.total_price)),
+                        "payment_id": razorpay_payment_id,
+                    },
+                )
+                logger.info(f"Invoice email queued for Order {order.id}")
+        except Exception as email_error:
+            logger.warning(
+                f"Email queue failed (payment already saved): {email_error}"
+            )
+
         return {
             "status": "success",
             "message": "Payment verified successfully.",

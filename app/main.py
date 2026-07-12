@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from redis.exceptions import RedisError
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.monitoring import init_sentry, MetricsMiddleware, router as monitoring_router
 
 from app.core.config import settings
 from app.core.exceptions import AppException
@@ -21,7 +22,31 @@ from app.api.v1 import coupon
 
 configure_logging()
 
+from dotenv import load_dotenv
+load_dotenv()
+
+import os
+import sentry_sdk
+from fastapi import FastAPI
+
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    traces_sample_rate=1.0,
+)
 app = FastAPI(title=settings.PROJECT_NAME)
+init_sentry()
+app.add_middleware(MetricsMiddleware)
+
+import sentry_sdk
+from sentry_sdk import metrics
+
+sentry_sdk.init(
+  dsn="https://20687881acf4d141ccff665ecb426a3b@o4511722837377024.ingest.us.sentry.io/4511722848911360",
+)
+
+metrics.count("checkout.failed", 1)
+metrics.gauge("queue.depth", 42)
+metrics.distribution("cart.amount_usd", 187.5)
 
 origins = [
     "http://localhost:3000",
@@ -58,8 +83,13 @@ app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["Webhooks"]
 app.include_router(coupon.router, prefix="/api/v1", tags=["Coupons"])
 app.include_router(inventory.router, prefix="/api/v1/admin/inventory", tags=["Inventory"])
 app.include_router(ws.router, prefix="/api/v1/ws", tags=["WebSockets"])
+app.include_router(monitoring_router)
 
 
+import os
+print("DSN:", os.getenv("SENTRY_DSN"))  # Should print your DSN, not None
 @app.get("/")
 async def health_check():
     return {"status": "online", "project": settings.PROJECT_NAME}
+
+
