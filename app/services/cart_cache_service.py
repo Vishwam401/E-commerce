@@ -3,7 +3,6 @@
 import uuid
 import logging
 from typing import Optional
-from decimal import Decimal
 
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -13,7 +12,6 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 CART_KEY_PREFIX = "cart:"
-CART_META_PREFIX = "cart:meta:"
 CART_TTL = settings.CART_CACHE_TTL  # 604800s = 7 days
 
 # Lua: atomic add/increment — prevents race between concurrent HGET+HSET
@@ -52,21 +50,10 @@ def _cart_key(user_id: uuid.UUID) -> str:
     return f"{CART_KEY_PREFIX}{user_id}"
 
 
-def _meta_key(user_id: uuid.UUID) -> str:
-    return f"{CART_META_PREFIX}{user_id}"
-
-
 def _get_redis() -> Redis:
     # Lazy import to avoid circular deps — singleton, so cheap
     from app.core.security import redis_client
     return redis_client
-
-
-async def _refresh_meta_ttl(redis: Redis, user_id: uuid.UUID) -> None:
-    """Keep cart + meta TTL in sync."""
-    meta_key = _meta_key(user_id)
-    if await redis.exists(meta_key):
-        await redis.expire(meta_key, CART_TTL)
 
 
 # ── Cart Item Operations ──
@@ -94,7 +81,6 @@ async def add_item_to_cache(
             ADD_ITEM_SCRIPT, 1,
             _cart_key(user_id), str(product_id), str(quantity), str(CART_TTL),
         )
-        await _refresh_meta_ttl(redis, user_id)
         return int(result) if result is not None else None
     except RedisError as exc:
         logger.warning(f"[CART_CACHE] Add failed: user={user_id}, product={product_id}: {exc}")
@@ -110,7 +96,6 @@ async def set_item_quantity(
         cart_key = _cart_key(user_id)
         await redis.hset(cart_key, str(product_id), str(quantity))
         await redis.expire(cart_key, CART_TTL)
-        await _refresh_meta_ttl(redis, user_id)
         return True
     except RedisError as exc:
         logger.warning(f"[CART_CACHE] Set qty failed: user={user_id}, product={product_id}: {exc}")
@@ -126,7 +111,6 @@ async def remove_item_from_cache(
         cart_key = _cart_key(user_id)
         await redis.hdel(cart_key, str(product_id))
         await redis.expire(cart_key, CART_TTL)
-        await _refresh_meta_ttl(redis, user_id)
         return True
     except RedisError as exc:
         logger.warning(f"[CART_CACHE] Remove failed: user={user_id}, product={product_id}: {exc}")
@@ -143,7 +127,6 @@ async def decrease_item_in_cache(
             DECREASE_ITEM_SCRIPT, 1,
             _cart_key(user_id), str(product_id), str(CART_TTL),
         )
-        await _refresh_meta_ttl(redis, user_id)
         return int(result) if result is not None else None
     except RedisError as exc:
         logger.warning(f"[CART_CACHE] Decrease failed: user={user_id}, product={product_id}: {exc}")
@@ -151,49 +134,13 @@ async def decrease_item_in_cache(
 
 
 async def clear_cart_cache(user_id: uuid.UUID) -> bool:
-    """DEL cart + meta keys (idempotent). Called on clear/checkout."""
+    """DEL cart key (idempotent). Called on clear/checkout."""
     redis = _get_redis()
     try:
-        await redis.delete(_cart_key(user_id), _meta_key(user_id))
+        await redis.delete(_cart_key(user_id))
         return True
     except RedisError as exc:
         logger.warning(f"[CART_CACHE] Clear failed: user={user_id}: {exc}")
-        return False
-
-
-# ── Cart Metadata (Coupon) ──
-
-async def get_cart_meta(user_id: uuid.UUID) -> Optional[dict[str, str]]:
-    """Read coupon_code + discount_amount from meta hash."""
-    redis = _get_redis()
-    try:
-        raw = await redis.hgetall(_meta_key(user_id))
-        return raw if raw else None
-    except RedisError as exc:
-        logger.warning(f"[CART_CACHE] Meta read failed: user={user_id}: {exc}")
-        return None
-
-
-async def set_cart_meta(
-    user_id: uuid.UUID,
-    coupon_code: Optional[str],
-    discount_amount: Decimal,
-) -> bool:
-    """Write or clear coupon metadata."""
-    redis = _get_redis()
-    try:
-        meta_key = _meta_key(user_id)
-        if coupon_code is None:
-            await redis.delete(meta_key)
-        else:
-            await redis.hset(meta_key, mapping={
-                "coupon_code": coupon_code,
-                "discount_amount": str(discount_amount),
-            })
-            await redis.expire(meta_key, CART_TTL)
-        return True
-    except RedisError as exc:
-        logger.warning(f"[CART_CACHE] Meta write failed: user={user_id}: {exc}")
         return False
 
 
@@ -202,10 +149,8 @@ async def set_cart_meta(
 async def populate_cache_from_db(
     user_id: uuid.UUID,
     items: dict[str, int],
-    coupon_code: Optional[str] = None,
-    discount_amount: Decimal = Decimal("0.00"),
 ) -> bool:
-    """Bulk load cart from DB into Redis via pipeline (single round-trip)."""
+    """Bulk load cart items from DB into Redis via pipeline (single round-trip)."""
     if not items:
         return True
 
@@ -218,15 +163,6 @@ async def populate_cache_from_db(
             for product_id, qty in items.items():
                 pipe.hset(cart_key, str(product_id), str(qty))
             pipe.expire(cart_key, CART_TTL)
-
-            if coupon_code:
-                meta_key = _meta_key(user_id)
-                pipe.hset(meta_key, mapping={
-                    "coupon_code": coupon_code,
-                    "discount_amount": str(discount_amount),
-                })
-                pipe.expire(meta_key, CART_TTL)
-
             await pipe.execute()
 
         logger.info(f"[CART_CACHE] Populated: user={user_id}, items={len(items)}")

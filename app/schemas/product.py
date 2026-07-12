@@ -1,5 +1,5 @@
 import uuid
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List, Dict, Any
 
 
@@ -7,6 +7,13 @@ from typing import Optional, List, Dict, Any
 class CategoryBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     parent_id: Optional[uuid.UUID] = None
+
+    @field_validator("parent_id", mode="before")
+    @classmethod
+    def blank_parent_id_to_none(cls, v):
+        # HTML forms send "" for an empty optional field — Pydantic's UUID
+        # validator rejects "" outright, so normalize it to None here.
+        return None if v == "" else v
 
 
 class CategoryCreate(CategoryBase):
@@ -30,6 +37,12 @@ class ProductBase(BaseModel):
     stock_quantity: int = Field(default=0, ge=0)
     category_id: Optional[uuid.UUID] = None  # native UUID
     attributes: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("category_id", mode="before")
+    @classmethod
+    def blank_category_id_to_none(cls, v):
+        # Same empty-string-from-form issue as Category.parent_id above.
+        return None if v == "" else v
 
 
 class ProductCreate(ProductBase):

@@ -71,12 +71,7 @@ class CartService:
             if item.product and not item.product.is_deleted:
                 items[str(item.product_id)] = item.quantity
 
-        await cache.populate_cache_from_db(
-            user_id=cart.user_id,
-            items=items,
-            coupon_code=cart.coupon_code,
-            discount_amount=cart.discount_amount or Decimal("0.00"),
-        )
+        await cache.populate_cache_from_db(user_id=cart.user_id, items=items)
 
     @staticmethod
     async def _build_cart_response_from_cache(
@@ -84,10 +79,15 @@ class CartService:
         user_id: uuid.UUID,
         cache_data: dict[str, int],
     ) -> Cart:
-        # Ensure cart row exists in DB (for cart.id, user_id, timestamps)
+        # Load the DB cart WITH its items. We need this for two reasons:
+        #   1. Real CartItem.id values — the API's update/remove/decrease
+        #      endpoints are keyed by item_id, so the response must carry the
+        #      same ids that exist in the DB (a fabricated id would 404).
+        #   2. The coupon fields (DB is the single source of truth for coupon).
         query = (
             select(Cart)
             .where(Cart.user_id == user_id)
+            .options(selectinload(Cart.items))
         )
         result = await db.execute(query)
         cart = result.scalar_one_or_none()
@@ -97,9 +97,12 @@ class CartService:
             cart = Cart(user_id=user_id)
             db.add(cart)
             await db.commit()
-            await db.refresh(cart)
+            await db.refresh(cart, attribute_names=["items"])
 
-        # Fetch all products referenced in the Redis cart
+        # Map product_id -> real DB CartItem (for real ids)
+        db_items_by_product = {str(i.product_id): i for i in cart.items}
+
+        # Fetch all products referenced in the Redis cart (name/price/is_deleted)
         product_ids = [uuid.UUID(pid) for pid in cache_data.keys()]
         if not product_ids:
             response_cart = Cart(
@@ -107,13 +110,15 @@ class CartService:
                 created_at=cart.created_at, updated_at=cart.updated_at,
                 items=[]
             )
+            response_cart.coupon_code = cart.coupon_code
+            response_cart.discount_amount = cart.discount_amount or Decimal("0.00")
             return response_cart
 
         product_query = select(Product).where(Product.id.in_(product_ids))
         product_result = await db.execute(product_query)
         products = {str(p.id): p for p in product_result.scalars().all()}
 
-        # Build CartItem-like objects, cleaning up ghosts
+        # Build response items: quantity from Redis, id/product from DB.
         items = []
         ghost_product_ids = []
 
@@ -121,20 +126,25 @@ class CartService:
             product = products.get(product_id_str)
 
             if product is None or product.is_deleted:
-                # Ghost product — remove from Redis cache
+                # Ghost product (deleted after being added) — clean from cache
                 ghost_product_ids.append(product_id_str)
                 continue
 
-            # Find existing CartItem or build a transient one for response
+            db_item = db_items_by_product.get(product_id_str)
+            # Real DB id if the item is already persisted; fall back to a
+            # deterministic id only for the brief window before the async
+            # DB sync creates the row.
+            item_id = db_item.id if db_item else uuid.uuid5(
+                uuid.NAMESPACE_OID, f"{cart.id}_{product_id_str}"
+            )
+
             item = CartItem(
-                id=uuid.uuid5(uuid.NAMESPACE_OID, f"{cart.id}_{product_id_str}"),
+                id=item_id,
                 cart_id=cart.id,
                 product_id=uuid.UUID(product_id_str),
-                quantity=quantity,
+                quantity=quantity,   # Redis is source of truth for quantity
             )
-            # Attach product for the relationship (needed by CartResponse schema)
             item.product = product
-            # Use existing CartItem.id if it exists in DB
             items.append(item)
 
         # Clean up ghosts from Redis (async, non-blocking)
@@ -146,7 +156,7 @@ class CartService:
                 f"from cache for user {user_id}"
             )
 
-        # Create a transient Cart so we don't trigger SQLAlchemy lazy-loads on the attached one
+        # Transient response cart (avoids triggering lazy-loads on the DB one)
         response_cart = Cart(
             id=cart.id,
             user_id=cart.user_id,
@@ -155,15 +165,9 @@ class CartService:
             items=items,
         )
 
-        # Read metadata (coupon)
-        meta = await cache.get_cart_meta(user_id)
-        if meta:
-            response_cart.coupon_code = meta.get("coupon_code")
-            discount_str = meta.get("discount_amount", "0.00")
-            response_cart.discount_amount = Decimal(discount_str)
-        else:
-            response_cart.coupon_code = None
-            response_cart.discount_amount = Decimal("0.00")
+        # Coupon lives only in the DB (single source of truth).
+        response_cart.coupon_code = cart.coupon_code
+        response_cart.discount_amount = cart.discount_amount or Decimal("0.00")
 
         return response_cart
 
@@ -230,15 +234,9 @@ class CartService:
                 for pid in db_product_ids - cache_product_ids:
                     await db.delete(db_items[pid])
 
-                # Sync coupon metadata
-                meta = await cache.get_cart_meta(user_id)
-                if meta:
-                    cart.coupon_code = meta.get("coupon_code")
-                    discount_str = meta.get("discount_amount", "0.00")
-                    cart.discount_amount = Decimal(discount_str)
-                else:
-                    cart.coupon_code = None
-                    cart.discount_amount = Decimal("0.00")
+                # NOTE: coupon is NOT synced here. Coupon is managed only by
+                # coupon_service (DB source of truth). Touching it here would
+                # wipe an applied coupon whenever a cart item changes.
 
                 await db.commit()
                 logger.debug(f"[CART_SYNC] Synced to DB: user={user_id}")

@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional, TYPE_CHECKING
 
-from sqlalchemy import String, ForeignKey, DateTime, Integer, Numeric, Enum as SQLEnum
+from sqlalchemy import String, ForeignKey, DateTime, Integer, Numeric, Enum as SQLEnum, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -29,6 +29,14 @@ class OrderStatus(str, enum.Enum):
 
 class Order(Base):
     __tablename__ = "orders"
+
+    # Composite index: "My Orders" and admin order list queries filter by
+    # user_id (+ optionally status) and sort by created_at DESC. This one
+    # index covers filter + sort together instead of needing a separate
+    # sort pass after an index-only filter.
+    __table_args__ = (
+        Index("ix_orders_user_status_created", "user_id", "status", "created_at"),
+    )
 
     # ── PRIMARY & FOREIGN KEYS ──
     id: Mapped[uuid.UUID] = mapped_column(

@@ -34,7 +34,7 @@ from app.core.exceptions import (
 )
 from app.db.models import User
 from app.schemas.user import PasswordResetCheck, PasswordResetConfirm, UserCreate
-from app.utils.email import send_verification_email
+from app.utils.email import send_verification_email, send_password_reset_email
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +210,7 @@ async def forgot_password_service(
 
     if user:
         token = create_password_reset_token(data.email)
-        background_tasks.add_task(send_verification_email, user.email, token)
+        background_tasks.add_task(send_password_reset_email, user.email, token)
 
     return {"detail": "If this email exists, a password reset link has been sent."}
 

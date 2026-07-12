@@ -70,3 +70,64 @@ async def send_verification_email(email_to: str, token: str):
     )
     fm = FastMail(conf)
     await fm.send_message(message)
+
+
+async def send_password_reset_email(email_to: str, token: str):
+    # Frontend's Reset() component reads the token from /reset-password?token=...
+    # (NOT /auth/verify — that's a different flow for email verification).
+    base_url = settings.EMAIL_VERIFY_BASE_URL.rstrip("/")
+    reset_link = f"{base_url}/reset-password?token={token}"
+
+    html = f"""
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f3f4f6;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+            <tr>
+              <td style="padding:24px 28px;background:#111827;color:#ffffff;font-size:20px;font-weight:700;">
+                Pro E-commerce API
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;line-height:1.6;">
+                <h2 style="margin:0 0 12px 0;font-size:22px;color:#111827;">Reset your password</h2>
+                <p style="margin:0 0 16px 0;color:#374151;font-size:15px;">
+                  We received a request to reset your password. This link is valid for 15 minutes.
+                </p>
+                <p style="margin:0 0 24px 0;">
+                  <a href="{reset_link}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px;">
+                    Reset Password
+                  </a>
+                </p>
+                <p style="margin:0 0 8px 0;color:#6b7280;font-size:13px;">
+                  If the button does not work, copy and paste this link into your browser:
+                </p>
+                <p style="margin:0;word-break:break-all;font-size:13px;">
+                  <a href="{reset_link}" style="color:#2563eb;text-decoration:underline;">{reset_link}</a>
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 28px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;">
+                If you did not request a password reset, you can safely ignore this email.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+    """
+
+    message = MessageSchema(
+        subject="Reset your password",
+        recipients=[email_to],
+        body=html,
+        subtype=MessageType.html
+    )
+    fm = FastMail(conf)
+    await fm.send_message(message)

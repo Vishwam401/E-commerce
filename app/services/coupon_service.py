@@ -16,8 +16,6 @@ from app.core.exceptions import (
     NotFoundError,
     BadRequestError,
 )
-from app.services import cart_cache_service as cart_cache
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -151,27 +149,14 @@ async def apply_coupon_to_cart(
     cart.discount_amount = discount
     await db.commit()
 
-    await db.refresh(cart)
-
-    final_total = cart.total_price
+    # final_total = subtotal - discount (floored at 0). Computed from local
+    # values — no post-commit ORM access needed (expire_on_commit=False anyway).
+    final_total = max(cart_subtotal - discount, Decimal("0.00"))
 
     logger.info(
         f"[COUPON] Applied: user={user_id}, code={coupon.code}, "
         f"discount={discount}, subtotal={cart_subtotal}, final={final_total}"
     )
-
-    # ── Sync coupon meta to Redis cart cache ──
-    if settings.CART_CACHE_ENABLED:
-        try:
-            await cart_cache.set_cart_meta(
-                user_id=user_id,
-                coupon_code=coupon.code,
-                discount_amount=discount,
-            )
-        except Exception as exc:
-            logger.warning(
-                f"[COUPON] Failed to sync coupon meta to Redis: user={user_id}: {exc}"
-            )
 
     return ApplyCouponResponse(
         coupon_code=coupon.code,
@@ -189,27 +174,14 @@ async def remove_coupon_from_cart(
 ) -> None:
 
     old_coupon_code = cart.coupon_code
+    user_id = cart.user_id
 
     cart.coupon_code = None
     cart.discount_amount = Decimal('0.00')
     await db.commit()
 
     if old_coupon_code:
-        logger.info(f"[COUPON] Removed from cart: user={cart.user_id}, was={old_coupon_code}")
-
-    # ── Clear coupon meta from Redis cart cache ──
-    if settings.CART_CACHE_ENABLED:
-        try:
-            await cart_cache.set_cart_meta(
-                user_id=cart.user_id,
-                coupon_code=None,
-                discount_amount=Decimal('0.00'),
-            )
-        except Exception as exc:
-            logger.warning(
-                f"[COUPON] Failed to clear coupon meta from Redis: "
-                f"user={cart.user_id}: {exc}"
-            )
+        logger.info(f"[COUPON] Removed from cart: user={user_id}, was={old_coupon_code}")
 
 
 # 6. USE COUPON IN CHECKOUT — CRITICAL: Race Condition Protection
