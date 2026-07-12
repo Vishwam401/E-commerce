@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
 import uuid
 import logging
 
@@ -36,6 +37,44 @@ class ProductService:
             logger.error(f"Database error creating product: {exc}", exc_info=True)
             raise DatabaseError("Failed to create product")
 
+
+    @staticmethod
+    async def search_products(db: AsyncSession, query_text: str, skip: int = 0, limit: int = 20):
+        """
+        Full-text search over product name + description using the tsvector
+        column and its GIN index.
+
+        Why plainto_tsquery: it takes the user's raw text ("running shirt")
+        and safely turns it into a tsquery ('run' & 'shirt') — stemming the
+        words and AND-ing them, without the user needing tsquery syntax and
+        without crashing on stray symbols.
+
+        Why ts_rank + ORDER BY: ranks results by relevance (title matches,
+        repeated terms score higher) so the best match surfaces first.
+        """
+        cleaned = (query_text or "").strip()
+        if not cleaned:
+            return []
+
+        try:
+            ts_query = func.plainto_tsquery("english", cleaned)
+            rank = func.ts_rank(Product.search_vector, ts_query)
+
+            stmt = (
+                select(Product)
+                .where(
+                    Product.is_deleted == False,
+                    Product.search_vector.op("@@")(ts_query),  # @@ = "matches?"
+                )
+                .order_by(rank.desc())
+                .offset(skip)
+                .limit(limit)
+            )
+            result = await db.execute(stmt)
+            return result.scalars().all()
+        except SQLAlchemyError as exc:
+            logger.error(f"Database error during product search: {exc}", exc_info=True)
+            raise DatabaseError("Search failed")
 
     @staticmethod
     async def get_active_products(db: AsyncSession, skip: int = 0, limit: int = 20):

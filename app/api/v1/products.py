@@ -51,6 +51,19 @@ async def list_products(
     return await ProductService.get_active_products(db, skip, limit)
 
 
+# NOTE: /search MUST be declared before /{product_id}. FastAPI matches routes
+# top-to-bottom; if /{product_id} came first, "search" would be captured as a
+# product_id path param instead of hitting this endpoint.
+@router.get("/search", response_model=List[ProductResponse])
+async def search_products(
+    q: str,
+    db: AsyncSession = Depends(deps.get_db),
+    skip: int = 0,
+    limit: int = 20,
+):
+    return await ProductService.search_products(db, query_text=q, skip=skip, limit=limit)
+
+
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(
     product_id: uuid.UUID,

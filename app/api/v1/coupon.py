@@ -45,7 +45,9 @@ async def apply_coupon(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user),
 ):
-    cart = await CartService.get_cart(db, current_user.id)
+    # Coupon writes need the real persistent DB cart (not the cache-built
+    # transient one), so we read straight from the DB here.
+    cart = await CartService._get_cart_from_db(db, current_user.id)
     return await apply_coupon_to_cart(
         db=db, cart=cart, user_id=current_user.id, code=request.code,
     )
@@ -56,7 +58,7 @@ async def remove_coupon(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user),
 ):
-    cart = await CartService.get_cart(db, current_user.id)
+    cart = await CartService._get_cart_from_db(db, current_user.id)
     await remove_coupon_from_cart(db, cart)
     return {"status": "removed"}
 
