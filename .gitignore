@@ -22,5 +22,7 @@ tests/
 # Ignore logs
 *.log
 
-# Ignore frontend (if added later)
-.frontend/
+# Frontend — ignore build artifacts and deps, but track source code
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

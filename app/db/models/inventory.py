@@ -43,7 +43,6 @@ class StockMovement(Base):
         UUID(as_uuid=True),
         ForeignKey("products.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     movement_type: Mapped[StockMovementType] = mapped_column(

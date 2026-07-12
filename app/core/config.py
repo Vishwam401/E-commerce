@@ -35,5 +35,9 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env.docker")
 
+    # Monitoring
+    SENTRY_DSN: str | None = None
+    ENVIRONMENT: str = "development"      
+
 
 settings = Settings()
