@@ -15,7 +15,7 @@ conf = ConnectionConfig(
 
 async def send_verification_email(email_to: str, token: str):
     base_url = settings.EMAIL_VERIFY_BASE_URL.rstrip("/")
-    verify_link = f"{base_url}/auth/verify?token={token}"
+    verify_link = f"{base_url}/verify?token={token}"
 
     html = f"""
 <!doctype html>
