@@ -29,7 +29,7 @@ api.interceptors.response.use((r) => r, async (error: AxiosError<{ detail?: stri
     const access = await refreshing; authStore.setState({ access }); original.headers.Authorization = `Bearer ${access}`; return api(original)
   } catch { authStore.getState().clear(); throw error }
 })
-export const message = (err: unknown) => axios.isAxiosError(err) ? err.response?.data?.detail || 'The service could not complete that request.' : 'The service could not complete that request.'
+export const message = (err: unknown) => axios.isAxiosError(err) ? err.response?.data?.message || err.response?.data?.detail || 'The service could not complete that request.' : 'The service could not complete that request.'
 export const money = (n?: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n || 0)
 export const date = (d?: string) => d ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(d)) : '—'
 
