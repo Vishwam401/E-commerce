@@ -1,0 +1,14 @@
+# ── API domain: api.alpha-commerce.tech ───────────────────────────────────────
+api.alpha-commerce.tech {
+
+    # Redirect HTTP → HTTPS (Caddy does this automatically)
+
+    # Reverse proxy all traffic to FastAPI container
+    reverse_proxy api:8000
+
+    # Logging
+    log {
+        output file /var/log/caddy/api-access.log
+        format json
+    }
+}

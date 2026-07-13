@@ -2,6 +2,7 @@
 .env
 .env*
 !.env.example
+!production.env.template
 
 # Ignore virtual environments
 .venv
