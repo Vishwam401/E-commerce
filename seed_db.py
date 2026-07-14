@@ -29,7 +29,7 @@ ADJECTIVES = ["Premium", "Pro", "Max", "Ultra", "Lite", "Plus", "Advanced", "Eli
 
 async def seed():
     print("Starting database seed...")
-    engine = create_async_engine(settings.SQLALCHEMY_DATABASE_URI)
+    engine = create_async_engine(settings.DATABASE_URL)
     SessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
     async with SessionLocal() as db:
