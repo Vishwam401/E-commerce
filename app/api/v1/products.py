@@ -46,7 +46,7 @@ async def create_product(
 async def list_products(
     db: AsyncSession = Depends(deps.get_db),
     skip: int = 0,
-    limit: int = 20
+    limit: int = 100
 ):
     return await ProductService.get_active_products(db, skip, limit)
 
@@ -59,7 +59,7 @@ async def search_products(
     q: str,
     db: AsyncSession = Depends(deps.get_db),
     skip: int = 0,
-    limit: int = 20,
+    limit: int = 100,
 ):
     return await ProductService.search_products(db, query_text=q, skip=skip, limit=limit)
 
