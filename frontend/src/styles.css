@@ -1344,12 +1344,13 @@ p {
   }
   .nav-actions {
     gap: 10px;
+    margin-left: auto;
   }
   .cart-button span {
     display: none;
   }
   .topbar .text-btn {
-    display: none;
+    font-size: 11px;
   }
   .hero {
     min-height: 540px;
@@ -1363,7 +1364,23 @@ p {
     padding: 45px 20px;
   }
   .product-grid {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 16px;
+    padding-bottom: 15px;
+    margin: 0 -20px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .product-grid::after {
+    content: "";
+    padding-right: 1px;
+  }
+  .product-card {
+    min-width: 220px;
+    scroll-snap-align: center;
+    flex-shrink: 0;
   }
   .product-art {
     height: 135px;
