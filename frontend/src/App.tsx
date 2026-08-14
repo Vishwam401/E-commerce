@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate, Outlet, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Activity, ArrowLeft, ArrowRight, Check, ChevronRight, CreditCard, FilePenLine, FolderTree, MapPin, Package, Plus, RefreshCw, RotateCcw, Search, ShoppingCart, SlidersHorizontal, XCircle } from 'lucide-react'
+import { Activity, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, CreditCard, FilePenLine, FolderTree, HelpCircle, Layers, MapPin, Package, Plus, RefreshCw, RotateCcw, Search, Server, Shield, ShoppingCart, SlidersHorizontal, Sparkles, XCircle, Zap } from 'lucide-react'
 import { api, authStore, date, endpoints, message, money, type Category, type Product } from './lib'
 import { CartDrawer, Footer, Header, Skeleton, Status, Toasts } from './components'
 import { AdminHome, AdminOrders, AdminProducts, Coupons, Inventory } from './admin'
@@ -11,12 +11,196 @@ const q = { products: ['products'], categories: ['categories'], addresses: ['add
 const field = (label: string, name: string, type = 'text', required = true, value?: string | number) => <label className="field"><span>{label}</span><input name={name} type={type} defaultValue={value} required={required} /></label>
 const clean = (form: HTMLFormElement) => Object.fromEntries(new FormData(form).entries())
 
-export function App() { return <><Header /><main><Routes><Route path="/" element={<Home />} /><Route path="/shop" element={<Shop />} /><Route path="/product/:id" element={<ProductPage />} /><Route path="/privacy" element={<Privacy />} /><Route path="/terms" element={<Terms />} /><Route path="/contact" element={<Contact />} /><Route path="/login" element={<Login />} /><Route path="/register" element={<Register />} /><Route path="/forgot-password" element={<Forgot />} /><Route path="/reset-password" element={<Reset />} /><Route path="/verify" element={<Verify />} /><Route path="/check-email" element={<CheckEmail />} /><Route element={<RequireAuth />}><Route path="/checkout" element={<Checkout />} /><Route path="/orders" element={<Orders />} /><Route path="/orders/:id" element={<OrderDetail />} /><Route path="/orders/:id/track" element={<TrackOrder />} /><Route path="/account" element={<Account />} /><Route path="/addresses" element={<Addresses />} /></Route><Route element={<RequireAdmin />}><Route path="/admin" element={<AdminHome />} /><Route path="/admin/products" element={<AdminProducts />} /><Route path="/admin/orders" element={<AdminOrders />} /><Route path="/admin/coupons" element={<Coupons />} /><Route path="/admin/inventory" element={<Inventory />} /></Route><Route path="*" element={<NotFound />} /></Routes></main><Footer /><CartDrawer /><Toasts /></> }
+export function App() { return <><Header /><main><Routes><Route path="/" element={<Home />} /><Route path="/shop" element={<Shop />} /><Route path="/pricing" element={<PricingPage />} /><Route path="/product/:id" element={<ProductPage />} /><Route path="/privacy" element={<Privacy />} /><Route path="/terms" element={<Terms />} /><Route path="/contact" element={<Contact />} /><Route path="/login" element={<Login />} /><Route path="/register" element={<Register />} /><Route path="/forgot-password" element={<Forgot />} /><Route path="/reset-password" element={<Reset />} /><Route path="/verify" element={<Verify />} /><Route path="/check-email" element={<CheckEmail />} /><Route element={<RequireAuth />}><Route path="/checkout" element={<Checkout />} /><Route path="/orders" element={<Orders />} /><Route path="/orders/:id" element={<OrderDetail />} /><Route path="/orders/:id/track" element={<TrackOrder />} /><Route path="/account" element={<Account />} /><Route path="/addresses" element={<Addresses />} /></Route><Route element={<RequireAdmin />}><Route path="/admin" element={<AdminHome />} /><Route path="/admin/products" element={<AdminProducts />} /><Route path="/admin/orders" element={<AdminOrders />} /><Route path="/admin/coupons" element={<Coupons />} /><Route path="/admin/inventory" element={<Inventory />} /></Route><Route path="*" element={<NotFound />} /></Routes></main><Footer /><CartDrawer /><Toasts /></> }
 
 const featuredProductNames = ['Zenith Earbuds Premium', 'Nexus Monitor Ultra', 'Nexus Keyboard Classic', 'Quantum Mouse Plus']
-function Home() { const { data: products, isLoading } = useQuery({ queryKey: q.products, queryFn: endpoints.products }); const { data: categories } = useQuery({ queryKey: q.categories, queryFn: endpoints.categories }); const featuredProducts = [...(products || [])].sort((a, b) => { const aIndex = featuredProductNames.indexOf(a.name), bIndex = featuredProductNames.indexOf(b.name); return (aIndex === -1 ? featuredProductNames.length : aIndex) - (bIndex === -1 ? featuredProductNames.length : bIndex) }); return <><section className="hero"><div className="eyebrow"><Activity size={14} /> ASYNC COMMERCE, OBSERVABLE</div><h1>The store is only<br /><em>the interface.</em></h1><p>Alpha-Commerce is an enterprise-grade async commerce engine: real-time inventory synchronization, distributed order pipeline, secure payment verification, and an immutable stock ledger built for modern scale.</p><div className="hero-actions"><Link className="primary" to="/shop">Browse catalog <ArrowRight size={17} /></Link><Link className="outline" to="/admin">View operations <ChevronRight size={17} /></Link></div><div className="system-strip"><span><b>JWT</b> AUTH</span><span><b>WS</b> TRACKING</span><span><b>RQ</b> QUEUED</span><span><b>₹</b> PAYMENTS</span></div></section><section className="home-section"><div className="section-title"><div><span className="eyebrow">COLLECTION INDEX</span><h2>In stock, in sync.</h2></div><Link to="/shop">Open catalog <ArrowRight size={16} /></Link></div><CategoryRail categories={categories || []} />{isLoading ? <Skeleton rows={4} /> : <ProductGrid products={featuredProducts} />}</section><section className="proof"><div><code>01 / REALTIME</code><h3>Status events arrive as they happen.</h3><p>No simulated timeline. Follow an order over an authenticated WebSocket connection.</p></div><div><code>02 / AUDITABLE</code><h3>Every unit carries a record.</h3><p>Stock adjustments retain the before → after snapshot and who performed the action.</p></div><Link to="/admin/inventory" className="proof-link">Inspect the ledger <ArrowRight /></Link></section></> }
+function Home() {
+  const { data: products, isLoading } = useQuery({ queryKey: q.products, queryFn: endpoints.products });
+  const { data: categories } = useQuery({ queryKey: q.categories, queryFn: endpoints.categories });
+  const featuredProducts = [...(products || [])].sort((a, b) => {
+    const aIndex = featuredProductNames.indexOf(a.name), bIndex = featuredProductNames.indexOf(b.name);
+    return (aIndex === -1 ? featuredProductNames.length : aIndex) - (bIndex === -1 ? featuredProductNames.length : bIndex)
+  });
+
+  return <>
+    <section className="hero">
+      <div className="eyebrow"><Activity size={14} /> ASYNC COMMERCE, OBSERVABLE</div>
+      <h1>The store is only<br /><em>the interface.</em></h1>
+      <p>Alpha-Commerce is an enterprise-grade async commerce engine: real-time inventory synchronization, distributed order pipeline, secure payment verification, and an immutable stock ledger built for modern scale.</p>
+      <div className="hero-actions">
+        <Link className="primary" to="/shop">Browse catalog <ArrowRight size={17} /></Link>
+        <Link className="outline" to="/pricing">Commercial plans <ChevronRight size={17} /></Link>
+      </div>
+      <div className="system-strip">
+        <span><b>JWT</b> AUTH</span>
+        <span><b>WS</b> TRACKING</span>
+        <span><b>RQ</b> QUEUED</span>
+        <span><b>₹</b> PAYMENTS</span>
+      </div>
+    </section>
+
+    <section className="trusted-by">
+      <span className="eyebrow">TRUSTED COMMERCE INFRASTRUCTURE</span>
+      <p>Powering fast-growing digital brands &amp; modern retail merchants</p>
+      <div className="brand-logos">
+        <span>ZENITH AUDIO</span>
+        <span>NEXUS TECH</span>
+        <span>HORIZON LABS</span>
+        <span>APEX APPAREL</span>
+        <span>QUANTUM GEAR</span>
+      </div>
+    </section>
+
+    <section className="features-section">
+      <div className="features-header">
+        <span className="eyebrow">HIGH-PERFORMANCE ARCHITECTURE</span>
+        <h2>Engineered for Zero Data Race &amp; Sub-millisecond Events</h2>
+        <p>Traditional e-commerce platforms struggle with flash-sale race conditions and slow batch reconciliation. Alpha-Commerce re-engineers every layer from database locking to push notifications.</p>
+      </div>
+      <div className="features-grid">
+        <div className="feature-card">
+          <div className="feature-icon"><Shield size={24} /></div>
+          <h3>Zero-Oversell Stock Ledger</h3>
+          <p>Strict distributed row-level locking ensures that two simultaneous checkouts never claim the same physical inventory unit, preserving auditability.</p>
+        </div>
+        <div className="feature-card">
+          <div className="feature-icon"><Zap size={24} /></div>
+          <h3>Authenticated WebSocket Stream</h3>
+          <p>Real-time order state events, package tracking, and payment receipts push directly to customer browsers without poll fatigue or stale cache.</p>
+        </div>
+        <div className="feature-card">
+          <div className="feature-icon"><Layers size={24} /></div>
+          <h3>Multi-Gateway Reconciliation</h3>
+          <p>Asynchronous webhook pipelines verify signatures, handle refunds, and settle orders with Razorpay, UPI, and major payment rails seamlessly.</p>
+        </div>
+      </div>
+    </section>
+
+    <section className="home-section">
+      <div className="section-title">
+        <div><span className="eyebrow">COLLECTION INDEX</span><h2>In stock, in sync.</h2></div>
+        <Link to="/shop">Open catalog <ArrowRight size={16} /></Link>
+      </div>
+      <CategoryRail categories={categories || []} />
+      {isLoading ? <Skeleton rows={4} /> : <ProductGrid products={featuredProducts} />}
+    </section>
+
+    <PricingSection isPreview={true} />
+    <FAQSection />
+    <CtaBanner />
+  </>
+}
+
 function CategoryRail({ categories }: { categories: Category[] }) { return <div className="category-rail">{categories.map((c) => <Link to={`/shop?category=${c.id}`} key={c.id}><FolderTree size={19} /><span>{c.name}</span><small>{c.sub_categories?.length || 0} groups</small></Link>)}</div> }
 function ProductGrid({ products }: { products: Product[] }) { return <div className="product-grid">{products.map((p, i) => <article className="product-card" key={p.id}><div className={`product-art art-${i % 4}`}><span>{p.name.slice(0, 1)}</span><small>{p.stock_quantity} units available</small></div><div className="product-info"><code>SKU / {p.slug}</code><h3>{p.name}</h3><p>{p.description || 'Product details available in the catalog.'}</p><div><strong>{money(p.price)}</strong><Link to={`/product/${p.id}`}>View <ArrowRight size={15} /></Link></div></div></article>)}</div> }
+
+function PricingSection({ isPreview = false }: { isPreview?: boolean }) {
+  return <section className="pricing-section">
+    <div className="pricing-header">
+      <span className="eyebrow">COMMERCIAL TIERS</span>
+      <h2>Transparent, Scale-Ready Pricing</h2>
+      <p>Whether you're launching your first digital brand or processing millions in monthly gross merchandise volume.</p>
+    </div>
+    <div className="pricing-grid">
+      <div className="pricing-card">
+        <div className="card-head">
+          <h3>Starter</h3>
+          <p className="card-desc">For emerging merchants launching their online catalog.</p>
+          <div className="price-row"><strong>₹0</strong><span>/ month + 1.5%</span></div>
+        </div>
+        <ul>
+          <li><CheckCircle2 size={16} /> Unlimited products &amp; orders</li>
+          <li><CheckCircle2 size={16} /> Standard webhook delivery</li>
+          <li><CheckCircle2 size={16} /> Razorpay &amp; UPI gateway integration</li>
+          <li><CheckCircle2 size={16} /> Community &amp; email support</li>
+        </ul>
+        <Link className="outline full" to="/register">Get started free</Link>
+      </div>
+
+      <div className="pricing-card featured">
+        <span className="popular-badge">MOST POPULAR</span>
+        <div className="card-head">
+          <h3>Growth</h3>
+          <p className="card-desc">For high-velocity DTC brands needing real-time sync.</p>
+          <div className="price-row"><strong>₹2,499</strong><span>/ month + 0.5%</span></div>
+        </div>
+        <ul>
+          <li><CheckCircle2 size={16} /> Everything in Starter</li>
+          <li><CheckCircle2 size={16} /> Real-time WebSocket order channel</li>
+          <li><CheckCircle2 size={16} /> Immutable inventory audit ledger</li>
+          <li><CheckCircle2 size={16} /> Custom domain &amp; SSL included</li>
+          <li><CheckCircle2 size={16} /> Priority 24/7 developer support</li>
+        </ul>
+        <Link className="primary full" to="/contact">Upgrade to Growth</Link>
+      </div>
+
+      <div className="pricing-card">
+        <div className="card-head">
+          <h3>Enterprise</h3>
+          <p className="card-desc">For high-volume retail networks with dedicated SLA.</p>
+          <div className="price-row"><strong>Custom</strong><span>volume pricing</span></div>
+        </div>
+        <ul>
+          <li><CheckCircle2 size={16} /> Dedicated isolated database clusters</li>
+          <li><CheckCircle2 size={16} /> 99.99% Uptime Service Level Agreement</li>
+          <li><CheckCircle2 size={16} /> Multi-warehouse distributed routing</li>
+          <li><CheckCircle2 size={16} /> Custom payment &amp; ERP integrations</li>
+        </ul>
+        <Link className="outline full" to="/contact">Talk to enterprise sales</Link>
+      </div>
+    </div>
+  </section>
+}
+
+function PricingPage() {
+  return <section className="page">
+    <div className="page-heading">
+      <div>
+        <span className="eyebrow">COMMERCIAL INFRASTRUCTURE</span>
+        <h1>Pricing built for<br />sustainable scale.</h1>
+      </div>
+      <Link className="primary" to="/contact">Contact sales <ArrowRight size={16} /></Link>
+    </div>
+    <PricingSection />
+    <FAQSection />
+    <CtaBanner />
+  </section>
+}
+
+function FAQSection() {
+  const faqs = [
+    { q: 'How does the zero-oversell inventory ledger work?', a: 'Alpha-Commerce uses transactional row-level locks on PostgreSQL with Redis-backed queueing. During high-concurrency checkouts, inventory claims are serialized so stock counts never fall below zero.' },
+    { q: 'What payment methods can my customers use?', a: 'We natively support Razorpay, UPI QR, major debit/credit cards, Netbanking, and digital wallets with automated asynchronous webhook verification.' },
+    { q: 'Can I connect my own custom domain?', a: 'Yes. On all plans, you can map your custom domain (e.g., store.yourbrand.com) with automated TLS/SSL certificate provisioning.' },
+    { q: 'Is there a contract or setup fee?', a: 'No setup fees or long-term contracts. You can upgrade, downgrade, or cancel your subscription at any time directly from the admin console.' },
+  ];
+  return <section className="faq-section">
+    <div className="faq-header">
+      <span className="eyebrow">FREQUENTLY ASKED QUESTIONS</span>
+      <h2>Everything you need to know</h2>
+      <p>Clear answers about our technology, pricing, and infrastructure capabilities.</p>
+    </div>
+    <div className="faq-grid">
+      {faqs.map((f) => <article key={f.q} className="faq-card">
+        <h3>{f.q}</h3>
+        <p>{f.a}</p>
+      </article>)}
+    </div>
+  </section>
+}
+
+function CtaBanner() {
+  return <section className="cta-banner">
+    <span className="eyebrow">GET STARTED TODAY</span>
+    <h2>Ready to modernize your commerce engine?</h2>
+    <p>Deploy a high-performance, real-time storefront backed by an immutable ledger in minutes.</p>
+    <div className="cta-buttons">
+      <Link className="primary" to="/shop">Browse live storefront <ArrowRight size={16} /></Link>
+      <Link className="outline" to="/contact">Talk to sales <ChevronRight size={16} /></Link>
+    </div>
+  </section>
+}
+
 function Shop() { const [params, setParams] = useSearchParams(); const categoryId = params.get('category') || ''; const [search, setSearch] = useState(''); const [debounced, setDebounced] = useState(''); useEffect(() => { const t = setTimeout(() => setDebounced(search.trim()), 300); return () => clearTimeout(t) }, [search]); const { data: categories } = useQuery({ queryKey: q.categories, queryFn: endpoints.categories }); const searching = debounced.length > 0; const { data, isLoading, isError } = useQuery({ queryKey: searching ? ['product-search', debounced] : q.products, queryFn: () => searching ? endpoints.searchProducts(debounced) : endpoints.products() }); const activeCategory = categories?.find((c) => c.id === categoryId); const found = (data || []).filter((p) => !categoryId || p.category_id === categoryId); return <section className="page"><div className="page-heading"><div><span className="eyebrow">CATALOG / LIVE API</span><h1>Find your next<br />useful thing.</h1></div><div className="search"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products" /></div></div>{categories && categories.length > 0 && <div className="category-rail"><button className={!categoryId ? 'active' : ''} onClick={() => setParams({})}>All</button>{categories.map((c) => <button key={c.id} className={categoryId === c.id ? 'active' : ''} onClick={() => setParams({ category: c.id })}>{c.name}</button>)}</div>}<div className="catalog-toolbar"><span>{found.length} products {searching ? `matched "${debounced}"` : 'returned'}{activeCategory ? ` in ${activeCategory.name}` : ''}</span><button><SlidersHorizontal size={16} /> {searching ? 'Full-text ranked' : 'Filtered at source'}</button></div>{isLoading ? <Skeleton rows={8} /> : isError ? <ApiError /> : found.length === 0 ? <Empty title="No matches." text="Try a different search term or category." to="/shop" label="Reset" /> : <ProductGrid products={found} />}</section> }
 function ProductPage() { const { id = '' } = useParams(); const { data: p, isLoading } = useQuery({ queryKey: ['product', id], queryFn: () => endpoints.product(id) }); const qc = useQueryClient(), toast = authStore((s) => s.toast); const add = useMutation({ mutationFn: () => api.post('/api/v1/cart/items', { product_id: id, quantity: 1 }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['cart'] }); toast('Added to cart.'); authStore.getState().toggleCart() }, onError: (e) => toast(message(e), 'error') }); if (isLoading) return <section className="page"><Skeleton rows={6} /></section>; if (!p) return <NotFound />; return <section className="page"><Link className="back" to="/shop"><ArrowLeft size={16} /> Catalog</Link><div className="product-detail"><div className="product-visual"><span>{p.name.slice(0, 1)}</span><code>INVENTORY / {p.stock_quantity} UNITS</code></div><div><span className="eyebrow">PRODUCT / {p.slug}</span><h1>{p.name}</h1><strong className="price">{money(p.price)}</strong><p>{p.description || 'No product description was supplied.'}</p><div className="stock-line"><span className={p.stock_quantity ? 'dot good' : 'dot bad'} />{p.stock_quantity ? `${p.stock_quantity} units currently available` : 'Out of stock'}</div><button className="primary" disabled={!p.stock_quantity || add.isPending} onClick={() => add.mutate()}><ShoppingCart size={17} /> Add to cart</button><dl className="specs">{Object.entries(p.attributes || {}).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{String(v)}</dd></div>)}</dl></div></div></section> }
 
