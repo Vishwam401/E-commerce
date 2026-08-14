@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, Boxes, ClipboardList, FilePenLine, FolderTree, PackagePlus, Pencil, Plus, RotateCcw, Search, Tags, WalletCards } from 'lucide-react'
+import { ArrowRight, Boxes, ClipboardList, FolderTree, PackagePlus, Pencil, Plus, Tags } from 'lucide-react'
 import { api, authStore, date, endpoints, message, money, type Product } from './lib'
 import { Skeleton, Status } from './components'
 
