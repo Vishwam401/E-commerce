@@ -54,7 +54,10 @@ export const money = (n?: number) => new Intl.NumberFormat('en-IN', { style: 'cu
 export const date = (d?: string) => d ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(d)) : '—'
 
 export const endpoints = {
-  products: () => api.get<Product[]>('/api/v1/products/').then((r) => r.data), product: (id: string) => api.get<Product>(`/api/v1/products/${id}`).then((r) => r.data), categories: () => api.get<Category[]>('/api/v1/products/categories').then((r) => r.data), searchProducts: (query: string) => api.get<Product[]>('/api/v1/products/search', { params: { q: query } }).then((r) => r.data),
+  products: (params?: { skip: number; limit: number }) => api.get<Product[]>('/api/v1/products/', { params }).then((r) => r.data),
+  product: (id: string) => api.get<Product>(`/api/v1/products/${id}`).then((r) => r.data),
+  categories: () => api.get<Category[]>('/api/v1/products/categories').then((r) => r.data),
+  searchProducts: (query: string, page?: { skip: number; limit: number }) => api.get<Product[]>('/api/v1/products/search', { params: { q: query, ...page } }).then((r) => r.data),
   cart: () => api.get<Cart>('/api/v1/cart/').then((r) => r.data), orders: () => api.get<Order[]>('/api/v1/orders/').then((r) => r.data), order: (id: string) => api.get<Order>(`/api/v1/orders/${id}`).then((r) => r.data), addresses: () => api.get<any[]>('/api/v1/addresses/').then((r) => r.data), me: () => api.get<User>('/api/v1/users/me').then((r) => r.data),
   adminProducts: () => api.get<Product[]>('/api/v1/admin/products').then((r) => r.data), adminOrders: () => api.get<Order[]>('/api/v1/admin/orders').then((r) => r.data), coupons: () => api.get<any>('/api/v1/admin/coupons').then((r) => r.data), inventory: () => api.get<any>('/api/v1/admin/inventory/report').then((r) => r.data), lowStock: () => api.get<any[]>('/api/v1/admin/inventory/low-stock').then((r) => r.data),
 }

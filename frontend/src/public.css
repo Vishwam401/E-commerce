@@ -125,6 +125,7 @@ html {
 .contact-card p { margin-top: 16px; }
 .contact-form .form-error, .contact-form .form-success { margin: 12px 0 0; }
 .contact-form .form-error { color: #a3303a; }
+.contact-form .form-error a { text-decoration: underline; }
 .contact-form .form-success { color: var(--teal-ink); }
 .legal-contact { margin-top: 18px; }
 
@@ -135,6 +136,7 @@ html {
 .catalog-controls .search { min-width: 0; flex: 0 1 265px; min-height: 44px; border-radius: 6px; }
 .catalog-controls .search input { min-width: 0; width: 100%; }
 .category-select { display: flex; gap: 9px; align-items: center; max-width: 100%; font-size: .86rem; }
+.catalog-pagination { margin-top: 20px; text-align: center; }
 .catalog-count { margin: 17px 0 13px; font-size: .86rem; }
 .catalog-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(10px, 1.55vw, 20px); }
 .catalog-card, .catalog-loading { min-width: 0; border: 1px solid var(--line); border-radius: 9px; background: white; }

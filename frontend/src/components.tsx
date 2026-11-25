@@ -50,7 +50,7 @@ export function Header() {
 export function Footer() {
   return <footer className="site-footer"><div className="footer-grid">
     <div className="footer-brand"><Link className="brand" to="/" aria-label="Alpha-Commerce home"><span aria-hidden="true">α</span> ALPHA<span className="dim">/COMMERCE</span></Link><p>Commerce infrastructure for digital brands and retail teams.</p></div>
-    <div><h2>Platform</h2><Link to="/demo">Live Demo</Link><Link to="/shop">Demo Catalog</Link><Link to="/pricing">Pricing</Link><Link to="/orders">Order Tracking</Link><a href="https://github.com/Vishwam401/E-commerce#-api-reference">Developer APIs</a></div>
+    <div><h2>Platform</h2><Link to="/demo">Live Demo</Link><Link to="/shop">Demo Catalog</Link><Link to="/pricing">Pricing</Link><Link to="/orders">Order Tracking</Link><a href="https://api.alpha-commerce.tech/docs">Developer APIs</a></div>
     <div><h2>Company</h2><Link to="/about">About Us</Link><Link to="/contact">Contact</Link><Link to="/contact?topic=demo">Request a Demo</Link></div>
     <div><h2>Legal</h2><Link to="/privacy">Privacy Policy</Link><Link to="/terms">Terms of Service</Link><Link to="/security">Security</Link></div>
   </div><div className="footer-bottom"><span>© Alpha-Commerce</span><a href="mailto:connect@alpha-commerce.tech">connect@alpha-commerce.tech</a></div></footer>

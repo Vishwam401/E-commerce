@@ -51,12 +51,12 @@ export function Home({ catalog }: { catalog: React.ReactNode }) {
 function Architecture() {
   return <section className="architecture landing-section" id="platform">
     <div className="landing-container">
-      <div className="landing-heading"><span className="eyebrow">PLATFORM ARCHITECTURE</span><h2>How the application runs</h2><p>Docker Compose defines the backend stack. The deployment configuration connects a Vercel-hosted frontend to the API through Caddy.</p></div>
+      <div className="landing-heading"><span className="eyebrow">PLATFORM ARCHITECTURE</span><h2>How the application runs</h2><p>The public React storefront runs on Vercel. The API runs on Oracle Cloud Infrastructure, where Docker Compose defines the backend services.</p></div>
       <div className="architecture-diagram" aria-label="React connects to FastAPI through Caddy over HTTPS and WebSocket. FastAPI uses PostgreSQL, Redis, and Razorpay. Redis queues notification jobs for Celery.">
-        <div className="architecture-node architecture-center"><Store size={23} aria-hidden="true" /><div><strong>React frontend</strong><small>Storefront and operations console</small></div></div>
+        <div className="architecture-node architecture-center"><Store size={23} aria-hidden="true" /><div><strong>React frontend</strong><small>Storefront and operations console on Vercel</small></div></div>
         <div className="architecture-connector"><ArrowDown size={18} aria-hidden="true" /> HTTPS &amp; authenticated WebSocket via Caddy</div>
         <div className="architecture-backend">
-          <div className="architecture-node architecture-center"><Server size={23} aria-hidden="true" /><div><strong>FastAPI</strong><small>Catalog, checkout, inventory, and orders</small></div></div>
+          <div className="architecture-node architecture-center"><Server size={23} aria-hidden="true" /><div><strong>FastAPI</strong><small>Catalog, checkout, inventory, and orders on OCI</small></div></div>
           <div className="architecture-connector"><ArrowDown size={18} aria-hidden="true" /> Persists records, queues jobs, and reconciles payments</div>
           <div className="architecture-branches">
             <div className="architecture-node"><Database size={22} aria-hidden="true" /><div><strong>PostgreSQL</strong><small>Orders and stock ledger</small></div></div>

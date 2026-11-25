@@ -22,7 +22,7 @@ export function About() {
       <article><h2>Why it matters</h2><p>When stock, payments, and order status are tracked in separate systems, merchants have to piece together what happened. Alpha-Commerce keeps inventory and order changes traceable from checkout through delivery.</p></article>
       <article><h2>Founder and contact</h2><p>Vishwam Vaghasiya founded Alpha-Commerce. The storefront and read-only operations demo are available for evaluation.</p><p><a href="https://www.linkedin.com/in/vishwam-vaghasiya/">Vishwam on LinkedIn</a><br /><a href="https://github.com/Vishwam401">Vishwam on GitHub</a><br /><a href={`mailto:${supportEmail}`}>{supportEmail}</a></p></article>
     </div>
-    <section className="operator-notes"><h2>Technology and infrastructure</h2><p>The React storefront connects to FastAPI, PostgreSQL, Redis, and Celery. Razorpay handles checkout, and Docker Compose defines the backend stack.</p><Link className="button-secondary" to="/#platform">Explore the architecture <ArrowRight size={16} /></Link></section>
+    <section className="operator-notes"><h2>Technology and infrastructure</h2><p>The React storefront connects to FastAPI, PostgreSQL, Redis, and Celery. Razorpay handles checkout. The public frontend runs on Vercel, and the API runs on Oracle Cloud Infrastructure using Docker Compose.</p><Link className="button-secondary" to="/#platform">Explore the architecture <ArrowRight size={16} /></Link></section>
     <section className="operator-notes"><h2>Product roadmap</h2><p>The public project roadmap includes two planned storefront improvements.</p><div className="public-card-grid roadmap-grid">
       <article><span className="roadmap-status">Planned</span><h3>Product reviews and ratings</h3><p>Let shoppers share feedback on products.</p></article>
       <article><span className="roadmap-status">Planned</span><h3>Wishlists and saved items</h3><p>Let shoppers keep a list of products to revisit.</p></article>
@@ -58,6 +58,8 @@ function ContactForm({ initialTopic }: { initialTopic: (typeof topics)[number]['
     setValidation('')
     submission.mutate(values, { onSuccess: () => form.reset() })
   }
+  const lastMessage = submission.variables
+  const emailDraft = lastMessage ? `mailto:${supportEmail}?subject=${encodeURIComponent(topics.find(({ value }) => value === lastMessage.topic)?.label || 'Alpha-Commerce inquiry')}&body=${encodeURIComponent(`Name: ${lastMessage.name}\nEmail: ${lastMessage.email}\n\n${lastMessage.message}`)}` : undefined
   return <form className="contact-form" onSubmit={submit} aria-busy={submission.isPending}>
     <h2>Send a message</h2>
     <fieldset disabled={submission.isPending}>
@@ -69,7 +71,7 @@ function ContactForm({ initialTopic }: { initialTopic: (typeof topics)[number]['
     </fieldset>
     {validation && <p className="form-error" role="alert">{validation}</p>}
     {submission.isSuccess && <p className="form-success" role="status">Your message was sent.</p>}
-    {submission.isError && <p className="form-error" role="alert">We couldn’t send your message. Try again in a minute or email {supportEmail} directly.</p>}
+    {submission.isError && <p className="form-error" role="alert">We couldn’t send your message. Try again or <a href={emailDraft}>open an email draft</a> and send it from your email app.</p>}
   </form>
 }
 
