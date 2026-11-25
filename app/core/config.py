@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_ID: str
     RAZORPAY_SECRET_KEY: str
     RAZORPAY_WEBHOOK_SECRET: str
+    CORS_ORIGINS: str = ""
     DEBUG: bool = False
 
     # Redis Cart Cache

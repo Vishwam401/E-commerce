@@ -8,26 +8,46 @@ export type Order = { id: string; total_price: number; discount_amount: number; 
 export type Cart = { id: string; items: { id: string; product_id: string; quantity: number; product: Pick<Product, 'id' | 'name' | 'slug' | 'price'> }[]; total_price: number; discount_amount: number; total_after_discount: number; coupon_code?: string }
 export type Toast = { id: number; type: 'success' | 'error'; message: string }
 
-const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://api.alpha-commerce.tech' : 'http://localhost:8000')
 export const api = axios.create({ baseURL: BASE })
-let refreshing: Promise<string> | undefined
-export const authStore = create<{ user?: User; access?: string; refresh?: string; cartOpen: boolean; toasts: Toast[]; setSession: (user: User, tokens?: { access_token: string; refresh_token: string }) => void; clear: () => void; toggleCart: () => void; toast: (message: string, type?: Toast['type']) => void }>((set) => ({
-  access: undefined, refresh: localStorage.getItem('refresh_token') || undefined, cartOpen: false, toasts: [],
-  setSession: (user, tokens) => { if (tokens) localStorage.setItem('refresh_token', tokens.refresh_token); set({ user, access: tokens?.access_token, refresh: tokens?.refresh_token }) },
-  clear: () => { localStorage.removeItem('refresh_token'); set({ user: undefined, access: undefined, refresh: undefined }) },
+type SessionTokens = { access_token: string; refresh_token: string }
+let refreshing: { token: string; request: Promise<SessionTokens> } | undefined
+export const authStore = create<{ user?: User; access?: string; refresh?: string; cartOpen: boolean; toasts: Toast[]; setSession: (user: User, tokens: SessionTokens) => void; clear: () => void; toggleCart: () => void; toast: (message: string, type?: Toast['type']) => void }>((set) => ({
+  access: undefined, refresh: typeof window === 'undefined' ? undefined : localStorage.getItem('refresh_token') || undefined, cartOpen: false, toasts: [],
+  setSession: (user, tokens) => { localStorage.setItem('refresh_token', tokens.refresh_token); set({ user, access: tokens.access_token, refresh: tokens.refresh_token }) },
+  clear: () => { localStorage.removeItem('refresh_token'); set({ user: undefined, access: undefined, refresh: undefined, cartOpen: false }) },
   toggleCart: () => set((s) => ({ cartOpen: !s.cartOpen })),
   toast: (message, type = 'success') => { const id = Date.now(); set((s) => ({ toasts: [...s.toasts, { id, type, message }] })); setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 4200) }
 }))
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => { const token = authStore.getState().access; if (token) config.headers.Authorization = `Bearer ${token}`; return config })
-api.interceptors.response.use((r) => r, async (error: AxiosError<{ detail?: string }>) => {
-  const original = error.config as InternalAxiosRequestConfig & { _retried?: boolean }
-  if (error.response?.status !== 401 || original?._retried || !authStore.getState().refresh) throw error
+api.interceptors.response.use((response) => response, async (error: AxiosError) => {
+  const original = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined
+  const session = authStore.getState()
+  const token = session.refresh
+  if (error.response?.status !== 401 || !original || original._retried || !token || original.url === '/auth/login') throw error
   original._retried = true
+  // A concurrent response may have already rotated the token used for this request.
+  if (session.access && original.headers.Authorization !== `Bearer ${session.access}`) return api(original)
   try {
-    refreshing ??= axios.post(`${BASE}/auth/refresh`, undefined, { params: { refresh_token: authStore.getState().refresh } }).then((r) => r.data.access_token).finally(() => { refreshing = undefined })
-    const access = await refreshing; authStore.setState({ access }); original.headers.Authorization = `Bearer ${access}`; return api(original)
-  } catch { authStore.getState().clear(); throw error }
+    if (refreshing?.token !== token) {
+      const request = axios.post<SessionTokens>(`${BASE}/auth/refresh`, undefined, { params: { refresh_token: token } })
+        .then(({ data }) => data).finally(() => { if (refreshing?.token === token) refreshing = undefined })
+      refreshing = { token, request }
+    }
+    const tokens = await refreshing.request
+    const current = authStore.getState()
+    if (current.refresh === token) {
+      localStorage.setItem('refresh_token', tokens.refresh_token)
+      authStore.setState({ access: tokens.access_token, refresh: tokens.refresh_token })
+    } else if (current.refresh !== tokens.refresh_token) {
+      throw error
+    }
+  } catch {
+    if (authStore.getState().refresh === token) authStore.getState().clear()
+    throw error
+  }
+  return api(original)
 })
 export const message = (err: unknown) => axios.isAxiosError(err) ? err.response?.data?.message || err.response?.data?.detail || 'The service could not complete that request.' : 'The service could not complete that request.'
 export const money = (n?: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(n || 0)

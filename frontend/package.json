@@ -5,14 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && vite build --ssr src/prerender.tsx --outDir node_modules/.tmp/alpha-prerender && node scripts/prerender.mjs",
     "lint": "eslint ."
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.8",
     "@tanstack/react-query-devtools": "^5.66.8",
     "axios": "^1.8.4",
-    "framer-motion": "^12.6.2",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

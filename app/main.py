@@ -17,7 +17,7 @@ from app.core.error_handlers import (
 )
 from app.core.logging_config import configure_logging
 from app.api.v1.auth import router as auth_router
-from app.api.v1 import products, cart, order, address, users, admin, webhooks, inventory, ws
+from app.api.v1 import products, cart, order, address, users, admin, webhooks, inventory, ws, contact
 from app.api.v1 import coupon
 
 configure_logging()
@@ -51,12 +51,15 @@ metrics.distribution("cart.amount_usd", 187.5)
 origins = [
     "http://localhost:3000",
     "http://localhost:3001",
-    "http://192.168.1.37:3001"
+    "http://192.168.1.37:3001",
+    "https://www.alpha-commerce.tech",
+    "https://alpha-commerce.tech",
+    "https://app.alpha-commerce.tech",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=[*origins, *(origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip())],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -83,6 +86,7 @@ app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["Webhooks"]
 app.include_router(coupon.router, prefix="/api/v1", tags=["Coupons"])
 app.include_router(inventory.router, prefix="/api/v1/admin/inventory", tags=["Inventory"])
 app.include_router(ws.router, prefix="/api/v1/ws", tags=["WebSockets"])
+app.include_router(contact.router, prefix="/api/v1", tags=["Contact"])
 app.include_router(monitoring_router)
 
 

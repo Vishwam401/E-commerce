@@ -1,5 +1,7 @@
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "routes": [
+    { "src": "/(demo|shop|pricing|about|contact|privacy|terms|security)/?", "dest": "/$1.html" },
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/spa.html" }
   ]
 }

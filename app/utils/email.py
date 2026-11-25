@@ -131,3 +131,13 @@ async def send_password_reset_email(email_to: str, token: str):
     )
     fm = FastMail(conf)
     await fm.send_message(message)
+
+async def send_contact_email(name: str, email: str, topic: str, body: str):
+    message = MessageSchema(
+        subject=f"Alpha-Commerce contact — {topic}",
+        recipients=["connect@alpha-commerce.tech"],
+        reply_to=[email],
+        body=f"Name: {name}\nEmail: {email}\n\n{body}",
+        subtype=MessageType.plain,
+    )
+    await FastMail(conf).send_message(message)

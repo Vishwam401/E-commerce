@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,7 +12,6 @@ body {
   margin: 0;
   font-family: "Public Sans", sans-serif;
   font-size: 15px;
-  overflow-x: hidden;
 }
 button,
 input,
@@ -158,16 +156,6 @@ p {
   position: relative;
   overflow: hidden;
 }
-.hero:after {
-  content: "SYS. / READY";
-  font: 600 11px "IBM Plex Mono";
-  letter-spacing: 0.14em;
-  color: #00bfa6;
-  position: absolute;
-  right: 8vw;
-  top: 32%;
-  writing-mode: vertical-rl;
-}
 .hero h1 {
   max-width: 830px;
 }
@@ -195,7 +183,7 @@ p {
   margin-top: 35px;
 }
 .primary,
-.outline {
+.button-secondary {
   border: 1px solid #00bfa6;
   display: inline-flex;
   gap: 9px;
@@ -207,30 +195,14 @@ p {
   background: #00bfa6;
   color: #02042b;
 }
-.outline {
+.button-secondary {
   background: transparent;
   color: inherit;
   border-color: #b7bacb;
 }
-.hero .outline {
+.hero .button-secondary {
   border-color: #55587a;
   color: white;
-}
-.system-strip {
-  display: flex;
-  gap: 30px;
-  position: absolute;
-  bottom: 35px;
-  right: 8vw;
-  font: 500 10px "IBM Plex Mono";
-  color: #6c7294;
-}
-.system-strip b {
-  color: white;
-  margin-right: 5px;
-}
-.home-section {
-  padding: 74px clamp(20px, 8vw, 150px);
 }
 .section-title,
 .page-heading,
@@ -253,118 +225,9 @@ p {
   gap: 8px;
   align-items: center;
 }
-.category-rail {
-  display: flex;
-  gap: 10px;
-  overflow: auto;
-  padding-bottom: 25px;
-}
-.category-rail a {
-  min-width: 148px;
-  min-height: 95px;
-  border: 1px solid #d9dbd3;
-  padding: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.category-rail svg {
-  color: #00a990;
-}
-.category-rail span {
-  font-family: "Space Grotesk";
-  font-weight: 600;
-}
-.category-rail small {
-  color: #7f8498;
-  font: 10px "IBM Plex Mono";
-}
-.category-rail button {
-  min-width: auto;
-  min-height: auto;
-  border: 1px solid #d9dbd3;
-  background: #fff;
-  padding: 9px 16px;
-  border-radius: 20px;
-  font: 600 13px "Public Sans";
-  cursor: pointer;
-  color: #02042b;
-}
-.category-rail button.active {
-  background: #02042b;
-  color: #fff;
-  border-color: #02042b;
-}
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-}
-.product-card {
-  border: 1px solid #d9dbd3;
-  background: #fff;
-}
-.product-art {
-  height: 190px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #dedbd1;
-  color: #02042b;
-}
-.product-art span,
-.product-visual span {
-  font: 600 120px "Space Grotesk";
-  opacity: 0.77;
-}
-.product-art small {
-  position: absolute;
-  bottom: 12px;
-  left: 13px;
-  background: #fff;
-  padding: 4px 6px;
-  font: 10px "IBM Plex Mono";
-}
-.art-1 {
-  background: #a9d8ce;
-}
-.art-2 {
-  background: #d5c8f4;
-}
-.art-3 {
-  background: #f4c9b6;
-}
-.product-info {
-  padding: 17px;
-}
-.product-info > code {
-  color: #85899a;
-}
-.product-info h3 {
-  margin-top: 7px;
-}
-.product-info p {
-  font-size: 13px;
-  min-height: 43px;
-}
-.product-info > div {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.product-info strong,
 .price {
   font-family: "IBM Plex Mono";
   font-size: 16px;
-}
-.product-info a {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  color: #008d7a;
-  font-size: 12px;
-  font-weight: 600;
 }
 .proof {
   background: #e9e9e1;
@@ -572,21 +435,6 @@ p {
   grid-template-columns: 1fr 1fr;
   gap: clamp(28px, 8vw, 125px);
   align-items: start;
-}
-.product-visual {
-  height: 500px;
-  background: #d7d6cd;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-.product-visual code {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  background: white;
-  padding: 7px;
 }
 .product-detail > div:last-child {
   padding-top: 45px;
@@ -1181,7 +1029,7 @@ p {
   border-color: #6c63ff;
   color: white;
 }
-.admin .outline {
+.admin .button-secondary {
   border-color: #6c63ff;
   color: #554ddd;
 }
@@ -1385,7 +1233,7 @@ p {
   width: 100%;
   padding: 8px;
 }
-.movement-actions .outline {
+.movement-actions .button-secondary {
   padding: 9px;
 }
 .ledger-table {
@@ -1490,41 +1338,6 @@ p {
     min-height: 540px;
     padding-top: 80px;
   }
-  .hero:after,
-  .system-strip {
-    display: none;
-  }
-  .home-section {
-    padding: 45px 20px;
-  }
-  .product-grid {
-    display: flex;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    gap: 16px;
-    padding-bottom: 15px;
-    margin: 0 -20px;
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-  .product-grid::after {
-    content: "";
-    padding-right: 1px;
-  }
-  .product-card {
-    min-width: 220px;
-    scroll-snap-align: center;
-    flex-shrink: 0;
-  }
-  .product-art {
-    height: 135px;
-  }
-  .product-info {
-    padding: 12px;
-  }
-  .product-info p {
-    display: none;
-  }
   .proof {
     margin: 0 20px 45px;
     grid-template-columns: 1fr;
@@ -1579,9 +1392,6 @@ p {
   }
   .contact-grid {
     grid-template-columns: 1fr;
-  }
-  .product-visual {
-    height: 300px;
   }
   .product-detail > div:last-child {
     padding-top: 28px;
@@ -1676,124 +1486,8 @@ p {
   .form-grid {
     grid-template-columns: 1fr;
   }
-  .product-art span {
-    font-size: 70px;
-  }
 }
 
-/* -------------------------------------------------------------
-   Enterprise SaaS Platform Sections (Pricing, Brands, Features, FAQ)
----------------------------------------------------------------- */
-.trusted-by {
-  background: #02042b;
-  border-bottom: 1px solid #1f2149;
-  padding: 36px clamp(20px, 5vw, 78px);
-  text-align: center;
-}
-.trusted-by .eyebrow {
-  color: #00f0aa;
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
-  display: block;
-  margin-bottom: 8px;
-}
-.trusted-by p {
-  color: #8b92b2;
-  font-size: 0.95rem;
-  margin-bottom: 24px;
-}
-.brand-logos {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: clamp(24px, 5vw, 64px);
-  flex-wrap: wrap;
-}
-.brand-logos span {
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 1.1rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: #4b5275;
-  transition: color 0.2s ease;
-}
-.brand-logos span:hover {
-  color: #c5cced;
-}
-
-.features-section {
-  padding: clamp(48px, 8vw, 96px) clamp(20px, 5vw, 78px);
-  background: #060938;
-  color: white;
-  border-bottom: 1px solid #1f2149;
-}
-.features-header {
-  max-width: 680px;
-  margin-bottom: 48px;
-}
-.features-header h2 {
-  font-size: clamp(2rem, 4vw, 3.2rem);
-  color: white;
-  margin-top: 8px;
-}
-.features-header p {
-  color: #8b92b2;
-  font-size: 1.05rem;
-}
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 24px;
-}
-.feature-card {
-  background: #02042b;
-  border: 1px solid #1f2149;
-  border-radius: 8px;
-  padding: 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  transition: transform 0.2s ease, border-color 0.2s ease;
-}
-.feature-card:hover {
-  transform: translateY(-3px);
-  border-color: #00f0aa;
-}
-.feature-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  background: rgba(0, 240, 170, 0.08);
-  color: #00f0aa;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.feature-card h3 {
-  color: white;
-  font-size: 1.3rem;
-  margin: 0;
-}
-.feature-card p {
-  color: #8b92b2;
-  font-size: 0.95rem;
-  line-height: 1.6;
-  margin: 0;
-}
-
-.pricing-section {
-  padding: clamp(48px, 8vw, 96px) clamp(20px, 5vw, 78px);
-  background: #f7f7f2;
-}
-.pricing-header {
-  text-align: center;
-  max-width: 640px;
-  margin: 0 auto 48px auto;
-}
-.pricing-header h2 {
-  font-size: clamp(2.2rem, 4.5vw, 3.4rem);
-  margin-top: 8px;
-}
 .pricing-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
@@ -1809,22 +1503,6 @@ p {
   display: flex;
   flex-direction: column;
   position: relative;
-}
-.pricing-card.featured {
-  border: 2px solid #02042b;
-  box-shadow: 0 12px 36px rgba(2, 4, 43, 0.09);
-}
-.popular-badge {
-  position: absolute;
-  top: -12px;
-  right: 24px;
-  background: #02042b;
-  color: #00f0aa;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  padding: 4px 12px;
-  border-radius: 20px;
 }
 .pricing-card .card-head {
   border-bottom: 1px solid #eef0f7;
@@ -1873,42 +1551,6 @@ p {
 .pricing-card li svg {
   color: #00c288;
   flex-shrink: 0;
-}
-
-.faq-section {
-  padding: clamp(48px, 8vw, 96px) clamp(20px, 5vw, 78px);
-  background: #ffffff;
-  border-top: 1px solid #eef0f7;
-  border-bottom: 1px solid #eef0f7;
-}
-.faq-header {
-  text-align: center;
-  max-width: 600px;
-  margin: 0 auto 48px auto;
-}
-.faq-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 24px;
-  max-width: 1080px;
-  margin: 0 auto;
-}
-.faq-card {
-  border: 1px solid #e5e7f0;
-  border-radius: 8px;
-  padding: 28px;
-  background: #fdfdfc;
-}
-.faq-card h3 {
-  font-size: 1.15rem;
-  margin-bottom: 10px;
-  color: #02042b;
-}
-.faq-card p {
-  font-size: 0.92rem;
-  color: #596079;
-  line-height: 1.6;
-  margin: 0;
 }
 
 .cta-banner {
